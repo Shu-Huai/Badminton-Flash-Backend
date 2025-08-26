@@ -1,0 +1,58 @@
+package shuhuai.badmintonflashbackend.constant;
+
+import org.springframework.stereotype.Component;
+import shuhuai.badmintonflashbackend.utils.DateTimes;
+
+import java.time.*;
+
+/**
+ * Redis 键生成器
+ * 所有 Key 都以 "bf:" 前缀开头，统一管理，避免硬编码
+ */
+@Component
+public class RedisKeys {
+    private static final String PREFIX = "bf:";
+
+    /** slotId 对应的信号量 */
+    public static String semKey(Integer slotId) {
+        return PREFIX + "sem:" + slotId;
+    }
+
+
+    /** slotId 对应的去重集合 */
+    public static String dedupKey(Integer slotId) {
+        return PREFIX + "dedup:" + slotId;
+    }
+
+    /** slotId 对应的闸门 */
+    public static String gateKey(Integer sessionId) {
+        return PREFIX + "gate:" + sessionId;
+    }
+
+    /** sessionId 对应的闸门时间 */
+    public static String gateTimeKey(Integer sessionId) {
+        return PREFIX + "gate:time:" + sessionId;
+    }
+
+    /** slotId 对应的预热完成标记 */
+    public static String warmupDoneKey(Integer sessionId) {
+        return PREFIX + "warmup:done:" + sessionId;
+    }
+
+    /** 当天 slots 已生成标记 */
+    public static String slotGenKey() {
+        return PREFIX + "slotgen";
+    }
+
+    /**
+     * 计算距离当天 23:59:59 的秒数
+     * @param day 目标日期
+     */
+    public long ttlToEndOfDaySeconds(LocalDate day) {
+        ZonedDateTime end = day.atTime(LocalTime.MAX.withNano(0))
+                .atZone(DateTimes.SHANGHAI);
+        ZonedDateTime now = ZonedDateTime.now(DateTimes.SHANGHAI);
+        long sec = Duration.between(now, end).getSeconds();
+        return Math.max(sec, 60); // 至少留 1 分钟
+    }
+}
