@@ -24,8 +24,6 @@ public class Config {
     @TableLogic(value = "1", delval = "0")
     private Boolean isActive;
 
-    private 
-
     public Config(ConfigItemDTO configItemDTO) {
         this.configKey = configItemDTO.getConfigKey();
         this.value = configItemDTO.getValue();

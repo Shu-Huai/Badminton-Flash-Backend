@@ -44,6 +44,11 @@ public class RedisKeys {
         return PREFIX + "slotgen";
     }
 
+    /** 限流键 */
+    public static String limitKey(String userKey) {
+        return PREFIX + "limit:" + userKey;
+    }
+
     /**
      * 计算距离当天 23:59:59 的秒数
      * @param day 目标日期
