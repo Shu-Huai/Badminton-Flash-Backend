@@ -57,43 +57,7 @@ public class WarmupScheduler {
         }
 
         for (FlashSession flashSession : flashSessions) {
-            List<TimeSlot> slots = timeSlotMapper.selectList(Wrappers.<TimeSlot>lambdaQuery()
-                    .eq(TimeSlot::getSessionId, flashSession.getId()));
-            if (slots.isEmpty()) {
-                continue;
-            }
-
-            for (TimeSlot slot : slots) {
-                Integer slotId = slot.getId();
-                // 幂等：warmup:done:{slotId}
-                RBucket<String> warmFlag = redisson.getBucket(RedisKeys.warmupDoneKey(slotId));
-                boolean first = warmFlag.setIfAbsent("1", Duration.ofSeconds(ttlSec));
-                if (!first) {
-                    // 该 slot 已预热过，跳过
-                    continue;
-                }
-                // semaphore: sem:{slotId}（许可=1；若你有容量字段可替换）
-                RSemaphore sem = redisson.getSemaphore(RedisKeys.semKey(slotId));
-                sem.trySetPermits(1);
-                sem.expire(Duration.ofSeconds(ttlSec));
-
-                // 3) 清空并设置 TTL（为确保存在后能设置 TTL，做一次 add/remove）
-                RSet<Long> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
-                dedup.delete();                          // 清空
-                dedup.add(-1L);                          // 确保 key 存在
-                dedup.expire(Duration.ofSeconds(ttlSec));
-            }
-
-
-            // 闸门
-            RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(flashSession.getId()));
-            gate.set("0", Duration.ofSeconds(ttlSec));
-            // 闸门时间
-            long startEpoch = ZonedDateTime
-                    .of(today, flashSession.getFlashTime(), DateTimes.SHANGHAI)
-                    .toEpochSecond();
-            RBucket<Long> gateTime = redisson.getBucket(RedisKeys.gateTimeKey(flashSession.getId()));
-            gateTime.set(startEpoch, Duration.ofSeconds(ttlSec));
+            adminService.warmupSession(flashSession);
         }
     }
 

@@ -19,7 +19,7 @@
         <jasypt.version>3.0.5</jasypt.version>
         <redisson.version>3.50.0</redisson.version>
         <knife4j.version>4.5.0</knife4j.version>
-        <bucket4j.version>8.12.1</bucket4j.version>
+        <bucket4j.version>8.14.0</bucket4j.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -92,6 +92,12 @@
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j_jdk17-redisson</artifactId>
             <version>${bucket4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-redis</artifactId>
+            <version>${bucket4j.version}</version>
+            <type>pom</type>
         </dependency>
     </dependencies>
     <build>

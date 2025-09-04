@@ -2,19 +2,31 @@ package shuhuai.badmintonflashbackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import org.redisson.Redisson;
+import org.redisson.api.RBucket;
+import org.redisson.api.RSemaphore;
+import org.redisson.api.RSet;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.enm.ConfigKey;
 import shuhuai.badmintonflashbackend.entity.Config;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
+import shuhuai.badmintonflashbackend.entity.TimeSlot;
 import shuhuai.badmintonflashbackend.mapper.ConfigMapper;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
+import shuhuai.badmintonflashbackend.mapper.ITimeSlotMapper;
 import shuhuai.badmintonflashbackend.model.dto.ConfigDTO;
 import shuhuai.badmintonflashbackend.model.dto.ConfigItemDTO;
 import shuhuai.badmintonflashbackend.model.dto.FlashSessionDTO;
 import shuhuai.badmintonflashbackend.service.AdminService;
 import shuhuai.badmintonflashbackend.service.ITimeSlotService;
+import shuhuai.badmintonflashbackend.utils.DateTimes;
 
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 @Service
@@ -22,12 +34,17 @@ public class AdminServiceImpl implements AdminService {
     private final ConfigMapper configMapper;
     private final IFlashSessionMapper sessionMapper;
     private final ITimeSlotService timeSlotService;
+    private final ITimeSlotMapper timeSlotMapper;
+    private final RedissonClient redisson;
 
     @Autowired
-    public AdminServiceImpl(ConfigMapper configMapper, IFlashSessionMapper sessionMapper, ITimeSlotService timeSlotService) {
+    public AdminServiceImpl(ConfigMapper configMapper, IFlashSessionMapper sessionMapper,
+                            ITimeSlotService timeSlotService, ITimeSlotMapper timeSlotMapper, RedissonClient redisson) {
         this.configMapper = configMapper;
         this.sessionMapper = sessionMapper;
         this.timeSlotService = timeSlotService;
+        this.timeSlotMapper = timeSlotMapper;
+        this.redisson = redisson;
     }
 
     @Override
@@ -89,5 +106,68 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public FlashSession getSession(Integer id) {
         return sessionMapper.selectById(id);
+    }
+
+    @Override
+    public void warmupSession(Integer sessionId) {
+        FlashSession session = sessionMapper.selectById(sessionId);
+        if (session == null) {
+            return;
+        }
+        warmupSession(session);
+    }
+
+    @Override
+    public void warmupSession(FlashSession session) {
+        LocalDate today = LocalDate.now(DateTimes.SHANGHAI);
+        long ttlSec = DateTimes.ttlToEndOfDaySeconds(today);
+        List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
+                .eq(TimeSlot::getSessionId, session.getId()));
+        if (timeSlots.isEmpty()) {
+            return;
+        }
+        for (TimeSlot timeSlot : timeSlots) {
+            Integer slotId = timeSlot.getId();
+            // 幂等：warmup:done:{slotId}
+            RBucket<String> warmFlag = redisson.getBucket(RedisKeys.warmupDoneKey(slotId));
+            boolean first = warmFlag.setIfAbsent("1", Duration.ofSeconds(ttlSec));
+            if (!first) {
+                // 该 slot 已预热过，跳过
+                continue;
+            }
+            // semaphore: sem:{slotId}（许可=1；若你有容量字段可替换）
+            RSemaphore semaphore = redisson.getSemaphore(RedisKeys.semKey(slotId));
+            semaphore.trySetPermits(1);
+            semaphore.expire(Duration.ofSeconds(ttlSec));
+            // 3) 清空并设置 TTL（为确保存在后能设置 TTL，做一次 add/remove）
+            RSet<Long> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
+            dedup.delete();                          // 清空
+            dedup.add(-1L);                          // 确保 key 存在
+            dedup.expire(Duration.ofSeconds(ttlSec));
+        }
+        RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
+        gate.set("0", Duration.ofSeconds(ttlSec));
+
+        long startEpoch = ZonedDateTime
+                .of(today, session.getFlashTime(), DateTimes.SHANGHAI)
+                .toEpochSecond();
+        RBucket<Long> gateTime = redisson.getBucket(RedisKeys.gateTimeKey(session.getId()));
+        gateTime.set(startEpoch, Duration.ofSeconds(ttlSec));
+    }
+
+    @Override
+    public void openSession(Integer sessionId) {
+        FlashSession session = sessionMapper.selectById(sessionId);
+        if (session == null) {
+            return;
+        }
+        RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
+        gate.set("1");
+    }
+
+    @Override
+    public void generateSlot(Integer sessionId) {
+        LocalDate today = LocalDate.now(DateTimes.SHANGHAI);
+        timeSlotService.generateForDate(today, sessionId);
     }
 }

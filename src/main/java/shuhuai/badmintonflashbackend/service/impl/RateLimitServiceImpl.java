@@ -27,13 +27,9 @@ public class RateLimitServiceImpl implements IRateLimitService {
 
     @Autowired
     public RateLimitServiceImpl(RedissonClient redisson) {
-        CommandExecutor exec = (CommandExecutor) ((Redisson) redisson).getCommandExecutor();
-
         this.buckets = Bucket4jRedisson
-                .casBasedBuilder((CommandAsyncExecutor) exec)
-                .expirationAfterWrite(
-                        ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(10)))
-                .keyMapper(Mapper.STRING) // 用 STRING 映射；前缀用 key 里加（见下）
+                .casBasedBuilder(((Redisson) redisson).getCommandExecutor())
+                .keyMapper(Mapper.STRING)
                 .build();
     }
 

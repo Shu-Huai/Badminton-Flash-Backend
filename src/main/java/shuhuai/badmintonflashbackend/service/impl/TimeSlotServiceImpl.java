@@ -3,14 +3,17 @@ package shuhuai.badmintonflashbackend.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import shuhuai.badmintonflashbackend.entity.Court;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.entity.TimeSlot;
+import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.mapper.CourtMapper;
 import shuhuai.badmintonflashbackend.mapper.ITimeSlotMapper;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
+import shuhuai.badmintonflashbackend.response.ResponseCode;
 import shuhuai.badmintonflashbackend.service.ITimeSlotService;
 import shuhuai.badmintonflashbackend.utils.DateTimes;
 
@@ -42,8 +45,9 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
         }
     }
 
+    @Override
     @Transactional
-    protected void generateForDate(LocalDate date, Integer sessionId) {
+    public void generateForDate(LocalDate date, Integer sessionId) {
         List<Court> courts = courtMapper.selectList(null);
         // 批量插入
         List<TimeSlot> timeSlots = new ArrayList<>();
@@ -51,8 +55,7 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
         // 校验整除
         long spanMin = Duration.between(flashSession.getBeginTime(), flashSession.getEndTime()).toMinutes();
         if (spanMin % flashSession.getSlotInterval() != 0) {
-            throw new IllegalArgumentException("时间段无法整除, sessionId=" + flashSession.getId()
-                    + ", span=" + spanMin + "min, interval=" + flashSession.getSlotInterval() + "min");
+            throw new BaseException(ResponseCode.TIME_UNDEVIDED);
         }
         for (Court court : courts) {
             for (LocalTime t = flashSession.getBeginTime();
@@ -67,8 +70,11 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
                 timeSlots.add(timeSlot);
             }
         }
-
-        saveBatch(timeSlots);
+        try {
+            saveBatch(timeSlots);
+        } catch (DuplicateKeyException e) {
+            throw new BaseException(ResponseCode.DUP_GEN_SLOT);
+        }
     }
 
     @Override

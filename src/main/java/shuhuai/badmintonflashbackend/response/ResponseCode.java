@@ -28,6 +28,18 @@ public enum ResponseCode {
 
     PARAM_ERROR(5010, "参数错误"),
 
+    TOO_MANY_REQUESTS(4101, "访问频率过高，请稍后再试"),
+
+    UNGATED(4002, "未开始"),
+
+    DUP_REQ(4003, "您已预约该时段"),
+
+    OUT_OF_STOCK(4004, "库存不足"),
+
+    TIME_UNDEVIDED(4444, "时间段无法整除"),
+
+    DUP_GEN_SLOT(4556, "时间槽已生成"),
+
     SQL_ERROR(5001, "服务器错误");
 
     private final int code;

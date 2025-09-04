@@ -24,6 +24,7 @@ public class DailySlotGenerateScheduler {
     @Resource
     private RedissonClient redisson;
 
+
     /**
      * 每分钟执行一次，命中配置时间时生成
      */
@@ -48,7 +49,6 @@ public class DailySlotGenerateScheduler {
         if (!first) {
             return; // 已有标记，本分钟已处理过，直接返回
         }
-
         // 查询有效 Session 并生成当日 TimeSlot（先删后建的实现放在 service 内）
         timeSlotService.generateForDate(today);
     }
