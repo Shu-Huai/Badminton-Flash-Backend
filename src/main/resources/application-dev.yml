@@ -7,10 +7,16 @@ spring:
         redis:
             host: redis.lvshuhuai.cn
             port: 6379
-            database: 1
+            database: 2
     sql:
         init:
             mode: always
+    rabbitmq:
+        host: lvshuhuai.cn
+        port: 5672
+        username: guest
+        password: guest
+        virtual-host: /
 
 jasypt:
     encryptor:

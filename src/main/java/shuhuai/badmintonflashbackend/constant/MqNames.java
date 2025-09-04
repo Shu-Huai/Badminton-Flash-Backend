@@ -2,6 +2,7 @@ package shuhuai.badmintonflashbackend.constant;
 
 
 public class MqNames {
-    public static final String BOOK_QUEUE = "book.q";
-    public static final String BOOK_EX = "book.ex";
+    public static final String RESERVE_EXCHANGE = "reserve.direct";
+    public static final String RESERVE_QUEUE = "reserve.queue";
+    public static final String RESERVE_ROUTING_KEY = "reserve";
 }

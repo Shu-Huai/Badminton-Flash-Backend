@@ -3,3 +3,7 @@ spring:
         active: dev
 server:
     port: 25001
+logging:
+    charset:
+        console: UTF-8
+        file: UTF-8

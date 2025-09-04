@@ -14,7 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin")
-public class AdminController {
+public class AdminController extends BaseController {
     private final AdminService adminService;
 
     @Autowired
@@ -71,6 +71,24 @@ public class AdminController {
     @DeleteMapping("/session/{id}")
     public Response<Void> deleteSession(@PathVariable(value = "id") Integer id) {
         adminService.deleteSession(id);
+        return new Response<>();
+    }
+
+    @PostMapping("/warmup/{sessionId}")
+    public Response<Void> warmupSession(@PathVariable(value = "sessionId") Integer sessionId) {
+        adminService.warmupSession(sessionId);
+        return new Response<>();
+    }
+
+    @PostMapping("/open/{sessionId}")
+    public Response<Void> openSession(@PathVariable(value = "sessionId") Integer sessionId) {
+        adminService.openSession(sessionId);
+        return new Response<>();
+    }
+
+    @PostMapping("/slot-gen/{sessionId}")
+    public Response<Void> generateSlot(@PathVariable(value = "sessionId") Integer sessionId) {
+        adminService.generateSlot(sessionId);
         return new Response<>();
     }
 }

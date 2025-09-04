@@ -26,4 +26,12 @@ public interface AdminService {
     List<FlashSession> getSessions();
 
     FlashSession getSession(Integer id);
+
+    void warmupSession(Integer sessionId);
+
+    void warmupSession(FlashSession session);
+
+    void openSession(Integer sessionId);
+
+    void generateSlot(Integer sessionId);
 }
