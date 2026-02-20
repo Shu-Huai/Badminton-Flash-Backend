@@ -2,7 +2,6 @@ package shuhuai.badmintonflashbackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import org.redisson.Redisson;
 import org.redisson.api.RBucket;
 import org.redisson.api.RSemaphore;
 import org.redisson.api.RSet;
@@ -119,8 +118,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public void warmupSession(FlashSession session) {
-        LocalDate today = LocalDate.now(DateTimes.SHANGHAI);
-        long ttlSec = DateTimes.ttlToEndOfDaySeconds(today);
+        long ttlSec = DateTimes.ttlToEndOfTodaySeconds();
         List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
                 .eq(TimeSlot::getSessionId, session.getId()));
         if (timeSlots.isEmpty()) {
@@ -128,6 +126,8 @@ public class AdminServiceImpl implements AdminService {
         }
         for (TimeSlot timeSlot : timeSlots) {
             Integer slotId = timeSlot.getId();
+            RBucket<Integer> slotSession = redisson.getBucket(RedisKeys.slotSessionKey(slotId));
+            slotSession.set(session.getId(), Duration.ofSeconds(ttlSec));
             // 幂等：warmup:done:{slotId}
             RBucket<String> warmFlag = redisson.getBucket(RedisKeys.warmupDoneKey(slotId));
             boolean first = warmFlag.setIfAbsent("1", Duration.ofSeconds(ttlSec));
@@ -149,7 +149,7 @@ public class AdminServiceImpl implements AdminService {
         gate.set("0", Duration.ofSeconds(ttlSec));
 
         long startEpoch = ZonedDateTime
-                .of(today, session.getFlashTime(), DateTimes.SHANGHAI)
+                .of(LocalDate.now(DateTimes.zone()), session.getFlashTime(), DateTimes.zone())
                 .toEpochSecond();
         RBucket<Long> gateTime = redisson.getBucket(RedisKeys.gateTimeKey(session.getId()));
         gateTime.set(startEpoch, Duration.ofSeconds(ttlSec));
@@ -161,13 +161,13 @@ public class AdminServiceImpl implements AdminService {
         if (session == null) {
             return;
         }
+        long ttlSec = DateTimes.ttlToEndOfTodaySeconds();
         RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
-        gate.set("1");
+        gate.set("1", Duration.ofSeconds(ttlSec));
     }
 
     @Override
     public void generateSlot(Integer sessionId) {
-        LocalDate today = LocalDate.now(DateTimes.SHANGHAI);
-        timeSlotService.generateForDate(today, sessionId);
+        timeSlotService.generateForDate(LocalDate.now(DateTimes.zone()), sessionId);
     }
 }

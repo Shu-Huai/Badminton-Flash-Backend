@@ -1,6 +1,11 @@
+app:
+    timezone: Asia/Shanghai
+
 spring:
     profiles:
         active: dev
+    jackson:
+        time-zone: ${app.timezone}
 server:
     port: 25001
 logging:
