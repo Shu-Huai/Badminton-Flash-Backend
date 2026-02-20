@@ -24,7 +24,6 @@ import shuhuai.badmintonflashbackend.service.ITimeSlotService;
 import shuhuai.badmintonflashbackend.utils.DateTimes;
 
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
 
@@ -149,7 +148,7 @@ public class AdminServiceImpl implements AdminService {
         gate.set("0", Duration.ofSeconds(ttlSec));
 
         long startEpoch = ZonedDateTime
-                .of(LocalDate.now(DateTimes.zone()), session.getFlashTime(), DateTimes.zone())
+                .of(DateTimes.nowDate(), session.getFlashTime(), DateTimes.zone())
                 .toEpochSecond();
         RBucket<Long> gateTime = redisson.getBucket(RedisKeys.gateTimeKey(session.getId()));
         gateTime.set(startEpoch, Duration.ofSeconds(ttlSec));
@@ -168,6 +167,6 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public void generateSlot(Integer sessionId) {
-        timeSlotService.generateForDate(LocalDate.now(DateTimes.zone()), sessionId);
+        timeSlotService.generateForDate(DateTimes.nowDate(), sessionId);
     }
 }

@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.*;
 import shuhuai.badmintonflashbackend.model.dto.ReserveDTO;
 import shuhuai.badmintonflashbackend.response.Response;
 import shuhuai.badmintonflashbackend.service.IReserveService;
+import shuhuai.badmintonflashbackend.utils.TokenValidator;
 
 @RestController
 @RequestMapping("/reserve")
@@ -18,7 +19,8 @@ public class ReserveController extends BaseController {
 
     @PostMapping("/")
     public Response<Void> reserve(@RequestBody ReserveDTO reserveDTO) {
-        reserveService.reserve(reserveDTO.getUserId(), reserveDTO.getSlotId(), reserveDTO.getSessionId());
+        Integer userId = Integer.parseInt(TokenValidator.getUser().get("userId"));
+        reserveService.reserve(userId, reserveDTO.getSlotId(), reserveDTO.getSessionId());
         return new Response<>();
     }
 }

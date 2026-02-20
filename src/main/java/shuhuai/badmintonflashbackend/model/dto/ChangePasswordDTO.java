@@ -1,13 +1,15 @@
 package shuhuai.badmintonflashbackend.model.dto;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Data
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ReserveDTO {
-    private Integer slotId;
-    private Integer sessionId;
+@Getter
+public class ChangePasswordDTO {
+    private String oldPassword;
+    private String newPassword;
 }

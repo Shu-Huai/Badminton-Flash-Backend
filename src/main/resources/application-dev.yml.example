@@ -14,13 +14,6 @@ spring:
     rabbitmq:
         host: example
         port: 5672
-        username: guest
-        password: guest
-        virtual-host: /
-
-jasypt:
-    encryptor:
+        username: example
         password: example
-        algorithm: PBEWITHMD5ANDDES
-        bean: jasyptComputer
-
+        virtual-host: /
