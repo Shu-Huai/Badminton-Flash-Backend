@@ -10,10 +10,13 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
+import shuhuai.badmintonflashbackend.auth.RequireRole;
 import shuhuai.badmintonflashbackend.config.TokenConfig;
+import shuhuai.badmintonflashbackend.enm.UserRole;
 import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.response.ResponseCode;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Date;
 import java.util.Map;
@@ -68,12 +71,13 @@ public class TokenValidator implements HandlerInterceptor {
      * @param userId 用户ID
      * @return 生成的Token
      */
-    public String getToken(Integer userId) {
+    public String getToken(Integer userId, String role) {
         long now = System.currentTimeMillis();
         Date issuedAt = new Date(now);
         Date expiresAt = new Date(now + tokenConfig.getOldToken());
         return JWT.create()
                 .withClaim("userId", userId.toString())
+                .withClaim("role", role)
                 .withIssuedAt(issuedAt)
                 .withExpiresAt(expiresAt)
                 .sign(Algorithm.HMAC256(tokenConfig.getPrivateKey()));
@@ -89,11 +93,21 @@ public class TokenValidator implements HandlerInterceptor {
         HashMap<String, String> map = new HashMap<>();
         DecodedJWT decodedjwt = JWT.require(Algorithm.HMAC256(tokenConfig.getPrivateKey())).build().verify(token);
         String userId = decodedjwt.getClaim("userId").asString();
+        String role = decodedjwt.getClaim("role").asString();
         Date issuedAt = decodedjwt.getIssuedAt();
         if (userId == null || issuedAt == null) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
+        if (role == null || role.isBlank()) {
+            role = UserRole.USER.name();
+        }
+        try {
+            UserRole.valueOf(role);
+        } catch (IllegalArgumentException e) {
+            throw new BaseException(ResponseCode.TOKEN_INVALID);
+        }
         map.put("userId", userId);
+        map.put("role", role);
         map.put("issuedAt", String.valueOf(issuedAt.getTime()));
         return map;
     }
@@ -109,7 +123,7 @@ public class TokenValidator implements HandlerInterceptor {
      */
     @Override
     public boolean preHandle(@NonNull HttpServletRequest httpServletRequest, @NonNull HttpServletResponse httpServletResponse, @NonNull Object object) {
-        if (!(object instanceof HandlerMethod)) {
+        if (!(object instanceof HandlerMethod handlerMethod)) {
             return true;
         }
         String authorization = httpServletRequest.getHeader("Authorization");
@@ -134,12 +148,46 @@ public class TokenValidator implements HandlerInterceptor {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
         Integer userId = Integer.parseInt(map.get("userId"));
+        String role = map.get("role");
         long timeOfUse = System.currentTimeMillis() - Long.parseLong(map.get("issuedAt"));
         if (timeOfUse >= tokenConfig.getYoungToken()) {
-            httpServletResponse.setHeader("Authorization", "Bearer " + getToken(userId));
+            httpServletResponse.setHeader("Authorization", "Bearer " + getToken(userId, role));
+        }
+
+        UserRole[] requiredRoles = getRequiredRoles(handlerMethod);
+        if (requiredRoles.length > 0) {
+            UserRole currentRole;
+            try {
+                currentRole = UserRole.valueOf(role);
+            } catch (IllegalArgumentException e) {
+                throw new BaseException(ResponseCode.TOKEN_INVALID);
+            }
+            boolean permitted = Arrays.stream(requiredRoles).anyMatch(requiredRole -> hasRole(currentRole, requiredRole));
+            if (!permitted) {
+                throw new BaseException(ResponseCode.FORBIDDEN);
+            }
         }
         setUser(map);
         return true;
+    }
+
+    private boolean hasRole(UserRole currentRole, UserRole requiredRole) {
+        if (currentRole == requiredRole) {
+            return true;
+        }
+        return currentRole == UserRole.ADMIN && requiredRole == UserRole.USER;
+    }
+
+    private UserRole[] getRequiredRoles(HandlerMethod handlerMethod) {
+        RequireRole methodAnnotation = handlerMethod.getMethodAnnotation(RequireRole.class);
+        if (methodAnnotation != null) {
+            return methodAnnotation.value();
+        }
+        RequireRole classAnnotation = handlerMethod.getBeanType().getAnnotation(RequireRole.class);
+        if (classAnnotation != null) {
+            return classAnnotation.value();
+        }
+        return new UserRole[0];
     }
 
     @Override

@@ -52,6 +52,9 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
         // 批量插入
         List<TimeSlot> timeSlots = new ArrayList<>();
         FlashSession flashSession = flashSessionMapper.selectById(sessionId);
+        if (flashSession == null) {
+            return;
+        }
         // 校验整除
         long spanMin = Duration.between(flashSession.getBeginTime(), flashSession.getEndTime()).toMinutes();
         if (spanMin % flashSession.getSlotInterval() != 0) {
@@ -73,7 +76,7 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
         try {
             saveBatch(timeSlots);
         } catch (DuplicateKeyException e) {
-            throw new BaseException(ResponseCode.DUP_GEN_SLOT);
+            // 幂等：该日期+场次已生成过，视为成功
         }
     }
 

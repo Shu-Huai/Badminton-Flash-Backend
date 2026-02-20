@@ -3,6 +3,7 @@ package shuhuai.badmintonflashbackend.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.redisson.api.RBucket;
+import org.redisson.api.RLock;
 import org.redisson.api.RSemaphore;
 import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
@@ -24,8 +25,10 @@ import shuhuai.badmintonflashbackend.service.ITimeSlotService;
 import shuhuai.badmintonflashbackend.utils.DateTimes;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class AdminServiceImpl implements AdminService {
@@ -119,7 +122,8 @@ public class AdminServiceImpl implements AdminService {
     public void warmupSession(FlashSession session) {
         long ttlSec = DateTimes.ttlToEndOfTodaySeconds();
         List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
-                .eq(TimeSlot::getSessionId, session.getId()));
+                .eq(TimeSlot::getSessionId, session.getId())
+                .eq(TimeSlot::getSlotDate, DateTimes.nowDate()));
         if (timeSlots.isEmpty()) {
             return;
         }
@@ -139,9 +143,9 @@ public class AdminServiceImpl implements AdminService {
             semaphore.trySetPermits(1);
             semaphore.expire(Duration.ofSeconds(ttlSec));
             // 3) 清空并设置 TTL（为确保存在后能设置 TTL，做一次 add/remove）
-            RSet<Long> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
+            RSet<Integer> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
             dedup.delete();                          // 清空
-            dedup.add(-1L);                          // 确保 key 存在
+            dedup.add(-1);                           // 确保 key 存在
             dedup.expire(Duration.ofSeconds(ttlSec));
         }
         RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
@@ -167,6 +171,39 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public void generateSlot(Integer sessionId) {
-        timeSlotService.generateForDate(DateTimes.nowDate(), sessionId);
+        FlashSession session = sessionMapper.selectById(sessionId);
+        if (session == null) {
+            return;
+        }
+        LocalDate today = DateTimes.nowDate();
+        long ttl = Math.max(DateTimes.ttlToEndOfDaySeconds(today), 60L);
+
+        RBucket<String> done = redisson.getBucket(RedisKeys.slotGenDoneKey(today, sessionId));
+        if (done.isExists()) {
+            return;
+        }
+
+        RLock lock = redisson.getLock(RedisKeys.slotGenLockKey(today, sessionId));
+        boolean locked;
+        try {
+            locked = lock.tryLock(0, 120, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        if (!locked) {
+            return;
+        }
+        try {
+            if (done.isExists()) {
+                return;
+            }
+            timeSlotService.generateForDate(today, sessionId);
+            done.set("1", Duration.ofSeconds(ttl));
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
     }
 }
