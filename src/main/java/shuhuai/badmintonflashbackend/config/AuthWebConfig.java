@@ -35,9 +35,9 @@ public class AuthWebConfig implements WebMvcConfigurer {
                 // 排除生成Token的测试路径
                 .excludePathPatterns("/test/generate-token")
                 // 排除登录路径
-                .excludePathPatterns("/user/login")
+                .excludePathPatterns("/auth/login")
                 // 排除注册路径
-                .excludePathPatterns("/user/register")
+                .excludePathPatterns("/auth/register")
                 // 排除协议路径
                 .excludePathPatterns("/user/protocol");
     }

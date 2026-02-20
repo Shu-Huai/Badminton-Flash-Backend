@@ -3,8 +3,8 @@ package shuhuai.badmintonflashbackend.controller;
 import org.springframework.web.bind.annotation.*;
 import shuhuai.badmintonflashbackend.auth.RequireRole;
 import shuhuai.badmintonflashbackend.enm.UserRole;
-import shuhuai.badmintonflashbackend.model.dto.ChangePasswordDTO;
-import shuhuai.badmintonflashbackend.model.dto.UserDTO;
+import shuhuai.badmintonflashbackend.model.dto.UserSelfUpdateDTO;
+import shuhuai.badmintonflashbackend.model.vo.UserAccountVO;
 import shuhuai.badmintonflashbackend.response.Response;
 import shuhuai.badmintonflashbackend.service.IUserService;
 import shuhuai.badmintonflashbackend.utils.TokenValidator;
@@ -14,38 +14,28 @@ import shuhuai.badmintonflashbackend.utils.TokenValidator;
 @RequireRole(UserRole.USER)
 public class UserController extends BaseController {
     private final IUserService userService;
-    private final TokenValidator tokenValidator;
 
-    public UserController(IUserService userService, TokenValidator tokenValidator) {
+    public UserController(IUserService userService) {
         this.userService = userService;
-        this.tokenValidator = tokenValidator;
     }
 
-    @PostMapping("/register")
-    public Response<String> register(@RequestBody UserDTO userDTO) {
-        Integer userId = userService.register(userDTO.getStudentId(), userDTO.getPassword());
-        String token = tokenValidator.getToken(userId, userService.getRole(userId).name());
-        return new Response<>(token);
-    }
-
-    @PostMapping("/login")
-    public Response<String> login(@RequestBody UserDTO userDTO) {
-        Integer userId = userService.login(userDTO.getStudentId(), userDTO.getPassword());
-        String token = tokenValidator.getToken(userId, userService.getRole(userId).name());
-        return new Response<>(token);
-    }
-
-    @PatchMapping("/password")
-    public Response<Void> changePassword(@RequestBody ChangePasswordDTO changePasswordDTO) {
+    @GetMapping("/me")
+    public Response<UserAccountVO> getMe() {
         Integer userId = Integer.parseInt(TokenValidator.getUser().get("userId"));
-        userService.changePassword(userId, changePasswordDTO.getOldPassword(), changePasswordDTO.getNewPassword());
+        return new Response<>(userService.getMe(userId));
+    }
+
+    @PatchMapping("/me")
+    public Response<Void> updateMe(@RequestBody UserSelfUpdateDTO userSelfUpdateDTO) {
+        Integer userId = Integer.parseInt(TokenValidator.getUser().get("userId"));
+        userService.updateMe(userId, userSelfUpdateDTO);
         return new Response<>();
     }
 
-    @DeleteMapping
-    public Response<Void> deleteUser() {
+    @DeleteMapping("/me")
+    public Response<Void> deleteMe() {
         Integer userId = Integer.parseInt(TokenValidator.getUser().get("userId"));
-        userService.deleteUser(userId);
+        userService.deleteMe(userId);
         return new Response<>();
     }
 
