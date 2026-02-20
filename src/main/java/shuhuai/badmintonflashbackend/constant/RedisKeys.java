@@ -45,19 +45,14 @@ public class RedisKeys {
         return PREFIX + "warmup:done:" + sessionId;
     }
 
-    /** 当天 slots 已生成标记 */
-    public static String slotGenKey() {
-        return PREFIX + "slotgen";
+    /** 指定日期 + session 的 slots 已生成标记 */
+    public static String slotGenDoneKey(LocalDate day, Integer sessionId) {
+        return PREFIX + "slotgen:done:" + DateTimes.yyyymmdd(day) + ":" + sessionId;
     }
 
-    /** 指定日期 slots 已生成标记 */
-    public static String slotGenDoneKey(LocalDate day) {
-        return PREFIX + "slotgen:done:" + DateTimes.yyyymmdd(day);
-    }
-
-    /** 指定日期 slots 生成任务锁 */
-    public static String slotGenLockKey(LocalDate day) {
-        return PREFIX + "slotgen:lock:" + DateTimes.yyyymmdd(day);
+    /** 指定日期 + session 的 slots 生成任务锁 */
+    public static String slotGenLockKey(LocalDate day, Integer sessionId) {
+        return PREFIX + "slotgen:lock:" + DateTimes.yyyymmdd(day) + ":" + sessionId;
     }
 
     /** 限流键 */

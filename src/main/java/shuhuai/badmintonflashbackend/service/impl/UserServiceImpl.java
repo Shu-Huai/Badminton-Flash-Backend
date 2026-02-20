@@ -3,6 +3,7 @@ package shuhuai.badmintonflashbackend.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.springframework.dao.DuplicateKeyException;
+import shuhuai.badmintonflashbackend.enm.UserRole;
 import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.response.ResponseCode;
 import shuhuai.badmintonflashbackend.service.IUserService;
@@ -29,6 +30,7 @@ public class UserServiceImpl extends ServiceImpl<IUserAccountMapper, UserAccount
         UserAccount userAccount = new UserAccount();
         userAccount.setStudentId(studentId.trim());
         userAccount.setPassword(HashComputer.getHashedString(password));
+        userAccount.setUserRole(UserRole.USER);
         try {
             userAccountMapper.insert(userAccount);
         } catch (DuplicateKeyException e) {
@@ -52,6 +54,22 @@ public class UserServiceImpl extends ServiceImpl<IUserAccountMapper, UserAccount
             throw new BaseException(ResponseCode.USERNAME_OR_PASSWORD_ERROR);
         }
         return userAccount.getId();
+    }
+
+    @Override
+    public UserRole getRole(Integer userId) {
+        if (userId == null) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        UserAccount userAccount = userAccountMapper.selectOne(
+                new LambdaQueryWrapper<UserAccount>()
+                        .eq(UserAccount::getId, userId)
+        );
+        if (userAccount == null) {
+            throw new BaseException(ResponseCode.TOKEN_INVALID);
+        }
+        UserRole userRole = userAccount.getUserRole();
+        return userRole == null ? UserRole.USER : userRole;
     }
 
     @Override

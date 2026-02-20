@@ -1,6 +1,8 @@
 package shuhuai.badmintonflashbackend.controller;
 
 import org.springframework.web.bind.annotation.*;
+import shuhuai.badmintonflashbackend.auth.RequireRole;
+import shuhuai.badmintonflashbackend.enm.UserRole;
 import shuhuai.badmintonflashbackend.model.dto.ChangePasswordDTO;
 import shuhuai.badmintonflashbackend.model.dto.UserDTO;
 import shuhuai.badmintonflashbackend.response.Response;
@@ -9,6 +11,7 @@ import shuhuai.badmintonflashbackend.utils.TokenValidator;
 
 @RestController
 @RequestMapping("/user")
+@RequireRole(UserRole.USER)
 public class UserController extends BaseController {
     private final IUserService userService;
     private final TokenValidator tokenValidator;
@@ -21,14 +24,14 @@ public class UserController extends BaseController {
     @PostMapping("/register")
     public Response<String> register(@RequestBody UserDTO userDTO) {
         Integer userId = userService.register(userDTO.getStudentId(), userDTO.getPassword());
-        String token = tokenValidator.getToken(userId);
+        String token = tokenValidator.getToken(userId, userService.getRole(userId).name());
         return new Response<>(token);
     }
 
     @PostMapping("/login")
     public Response<String> login(@RequestBody UserDTO userDTO) {
         Integer userId = userService.login(userDTO.getStudentId(), userDTO.getPassword());
-        String token = tokenValidator.getToken(userId);
+        String token = tokenValidator.getToken(userId, userService.getRole(userId).name());
         return new Response<>(token);
     }
 

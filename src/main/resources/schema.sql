@@ -60,6 +60,8 @@ create table if not exists user_account
     create_time timestamp  default CURRENT_TIMESTAMP not null,
     update_time timestamp  default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
     is_active   tinyint(1) default 1                 not null,
+    password    varchar(255)                         not null,
+    user_role   varchar(31) default 'USER'           not null,
     constraint user_account_pk
         unique (student_id)
 );

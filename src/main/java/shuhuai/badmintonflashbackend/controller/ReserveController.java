@@ -2,6 +2,8 @@ package shuhuai.badmintonflashbackend.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import shuhuai.badmintonflashbackend.auth.RequireRole;
+import shuhuai.badmintonflashbackend.enm.UserRole;
 import shuhuai.badmintonflashbackend.model.dto.ReserveDTO;
 import shuhuai.badmintonflashbackend.response.Response;
 import shuhuai.badmintonflashbackend.service.IReserveService;
@@ -9,6 +11,7 @@ import shuhuai.badmintonflashbackend.utils.TokenValidator;
 
 @RestController
 @RequestMapping("/reserve")
+@RequireRole(UserRole.USER)
 public class ReserveController extends BaseController {
     private final IReserveService reserveService;
 
