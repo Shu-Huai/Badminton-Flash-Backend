@@ -21,7 +21,7 @@ jasypt:
 # Token私钥
 token:
     privateKey: ENC(uJcujptsJM2XISNPFiTEGjUKS08qLtBN)
-    # 年轻Token过期时间（毫秒）
-    youngToken: 1000000
-    # 老Token过期时间（毫秒）
-    oldToken: 3000000000
+    # Access Token过期时间（毫秒）
+    accessTokenTtl: 90000
+    # Refresh Token过期时间（毫秒）
+    refreshTokenTtl: 1209600000

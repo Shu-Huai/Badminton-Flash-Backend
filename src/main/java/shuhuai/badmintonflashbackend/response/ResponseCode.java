@@ -18,6 +18,8 @@ public enum ResponseCode {
 
     FORBIDDEN(403, "权限不足"),
 
+    DB_ERROR(5002, "数据库错误"),
+
     FAILED(1001, "操作失败"),
 
     USER_DUPLICATED(2042, "用户已存在"),
