@@ -9,6 +9,7 @@ import java.time.*;
  * Redis 键生成器
  * 所有 Key 都以 "bf:" 前缀开头，统一管理，避免硬编码
  */
+@SuppressWarnings("unused")
 @Component
 public class RedisKeys {
     private static final String PREFIX = "bf:";
@@ -24,7 +25,12 @@ public class RedisKeys {
         return PREFIX + "dedup:" + slotId;
     }
 
-    /** slotId 对应的闸门 */
+    /** slotId 对应的 sessionId 映射 */
+    public static String slotSessionKey(Integer slotId) {
+        return PREFIX + "slot:session:" + slotId;
+    }
+
+    /** sessionId 对应的闸门 */
     public static String gateKey(Integer sessionId) {
         return PREFIX + "gate:" + sessionId;
     }
@@ -44,6 +50,16 @@ public class RedisKeys {
         return PREFIX + "slotgen";
     }
 
+    /** 指定日期 slots 已生成标记 */
+    public static String slotGenDoneKey(LocalDate day) {
+        return PREFIX + "slotgen:done:" + DateTimes.yyyymmdd(day);
+    }
+
+    /** 指定日期 slots 生成任务锁 */
+    public static String slotGenLockKey(LocalDate day) {
+        return PREFIX + "slotgen:lock:" + DateTimes.yyyymmdd(day);
+    }
+
     /** 限流键 */
     public static String limitKey(String userKey) {
         return PREFIX + "limit:" + userKey;
@@ -55,8 +71,8 @@ public class RedisKeys {
      */
     public long ttlToEndOfDaySeconds(LocalDate day) {
         ZonedDateTime end = day.atTime(LocalTime.MAX.withNano(0))
-                .atZone(DateTimes.SHANGHAI);
-        ZonedDateTime now = ZonedDateTime.now(DateTimes.SHANGHAI);
+                .atZone(DateTimes.zone());
+        ZonedDateTime now = ZonedDateTime.now(DateTimes.zone());
         long sec = Duration.between(now, end).getSeconds();
         return Math.max(sec, 60); // 至少留 1 分钟
     }

@@ -81,10 +81,10 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
     @Transactional
     public void addSessionHandler(Integer sessionId) {
         FlashSession flashSession = flashSessionMapper.selectById(sessionId);
-        if (flashSession.getBeginTime().isBefore(LocalTime.now(DateTimes.SHANGHAI))) {
+        if (flashSession.getBeginTime().isBefore(DateTimes.nowTime())) {
             return;
         }
-        generateForDate(LocalDate.now(DateTimes.SHANGHAI), sessionId);
+        generateForDate(LocalDate.now(DateTimes.zone()), sessionId);
     }
 
     @Override
@@ -100,11 +100,11 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
     public void deleteSessionHandler(Integer sessionId) {
         FlashSession flashSession = flashSessionMapper.selectById(sessionId);
         // 如果早于现在就什么都不做
-        if (flashSession.getBeginTime().isBefore(LocalTime.now(DateTimes.SHANGHAI))) {
+        if (flashSession.getBeginTime().isBefore(DateTimes.nowTime())) {
             return;
         }
         // 如果晚于
         timeSlotMapper.delete(new LambdaQueryWrapper<TimeSlot>().eq(TimeSlot::getSessionId, sessionId)
-                .eq(TimeSlot::getSlotDate, LocalDate.now(DateTimes.SHANGHAI)));
+                .eq(TimeSlot::getSlotDate, LocalDate.now(DateTimes.zone())));
     }
 }
