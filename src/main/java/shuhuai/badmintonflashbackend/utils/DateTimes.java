@@ -22,7 +22,7 @@ public final class DateTimes {
      * 当前时间（应用时区）
      */
     public static LocalDateTime now() {
-        return LocalDateTime.now(APP_ZONE);
+        return now(APP_ZONE);
     }
 
     /**
@@ -36,7 +36,14 @@ public final class DateTimes {
      * 当前日期（应用时区）
      */
     public static LocalDate nowDate() {
-        return LocalDate.now(APP_ZONE);
+        return nowDate(APP_ZONE);
+    }
+
+    /**
+     * 当前日期（指定时区）
+     */
+    public static LocalDate nowDate(ZoneId zoneId) {
+        return LocalDate.now(zoneId);
     }
 
     /**
@@ -50,21 +57,21 @@ public final class DateTimes {
      * 当前时间（应用时区）
      */
     public static LocalTime nowTime() {
-        return LocalTime.now(APP_ZONE);
+        return nowTime(APP_ZONE);
     }
 
     /**
      * 当前分钟（去掉秒、纳秒）
      */
     public static LocalTime nowMinute() {
-        return LocalTime.now(APP_ZONE).withSecond(0).withNano(0);
+        return nowTime(APP_ZONE).withSecond(0).withNano(0);
     }
 
     /**
      * 计算到指定日期结束（次日 00:00）的剩余秒数
      */
     public static long ttlToEndOfDaySeconds(LocalDate date) {
-        LocalDateTime now = LocalDateTime.now(APP_ZONE);
+        LocalDateTime now = now(APP_ZONE);
         LocalDateTime end = date.plusDays(1).atStartOfDay();
         return Duration.between(now, end).getSeconds();
     }

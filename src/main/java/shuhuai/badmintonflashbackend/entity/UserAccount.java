@@ -16,6 +16,7 @@ public class UserAccount {
     @TableId(type = IdType.AUTO)
     private Integer id;
     private String studentId;
+    private String password;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
     @TableLogic(value = "1", delval = "0")

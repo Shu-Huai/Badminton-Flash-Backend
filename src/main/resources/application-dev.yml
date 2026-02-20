@@ -14,13 +14,6 @@ spring:
     rabbitmq:
         host: lvshuhuai.cn
         port: 5672
-        username: guest
-        password: guest
+        username: lvzhi
+        password: ENC(uJcujptsJM2XISNPFiTEGjUKS08qLtBN)
         virtual-host: /
-
-jasypt:
-    encryptor:
-        password: prwq0421
-        algorithm: PBEWITHMD5ANDDES
-        bean: jasyptComputer
-

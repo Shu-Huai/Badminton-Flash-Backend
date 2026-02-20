@@ -20,6 +20,9 @@ public enum ResponseCode {
 
     FAILED(1001, "操作失败"),
 
+    USER_DUPLICATED(2042, "用户已存在"),
+
+
     VALIDATE_FAILED(1002, "参数校验失败"),
 
     VSPHERE_LINK_ERROR(2001, "vsphere连接操作失败"),

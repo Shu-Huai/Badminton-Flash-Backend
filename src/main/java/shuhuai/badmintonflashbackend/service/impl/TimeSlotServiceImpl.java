@@ -84,7 +84,7 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
         if (flashSession.getBeginTime().isBefore(DateTimes.nowTime())) {
             return;
         }
-        generateForDate(LocalDate.now(DateTimes.zone()), sessionId);
+        generateForDate(DateTimes.nowDate(), sessionId);
     }
 
     @Override
@@ -105,6 +105,6 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
         }
         // 如果晚于
         timeSlotMapper.delete(new LambdaQueryWrapper<TimeSlot>().eq(TimeSlot::getSessionId, sessionId)
-                .eq(TimeSlot::getSlotDate, LocalDate.now(DateTimes.zone())));
+                .eq(TimeSlot::getSlotDate, DateTimes.nowDate()));
     }
 }

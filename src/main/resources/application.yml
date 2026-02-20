@@ -12,3 +12,16 @@ logging:
     charset:
         console: UTF-8
         file: UTF-8
+jasypt:
+    encryptor:
+        password: prwq0421
+        algorithm: PBEWITHMD5ANDDES
+        bean: jasyptComputer
+# Token配置
+# Token私钥
+token:
+    privateKey: ENC(uJcujptsJM2XISNPFiTEGjUKS08qLtBN)
+    # 年轻Token过期时间（毫秒）
+    youngToken: 1000000
+    # 老Token过期时间（毫秒）
+    oldToken: 3000000000

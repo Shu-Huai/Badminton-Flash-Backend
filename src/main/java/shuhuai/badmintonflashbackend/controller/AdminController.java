@@ -51,7 +51,7 @@ public class AdminController extends BaseController {
     }
 
     @GetMapping("/session/{id}")
-    public Response<FlashSession> getSession(@PathVariable(value = "id") Integer id) {
+    public Response<FlashSession> getSession(@PathVariable Integer id) {
         return new Response<>(adminService.getSession(id));
     }
 
@@ -62,32 +62,32 @@ public class AdminController extends BaseController {
     }
 
     @PatchMapping("/session/{id}")
-    public Response<Void> updateSession(@PathVariable(value = "id") Integer id,
+    public Response<Void> updateSession(@PathVariable Integer id,
                                         @RequestBody FlashSessionDTO flashSessionDTO) {
         adminService.updateSession(id, flashSessionDTO);
         return new Response<>();
     }
 
     @DeleteMapping("/session/{id}")
-    public Response<Void> deleteSession(@PathVariable(value = "id") Integer id) {
+    public Response<Void> deleteSession(@PathVariable Integer id) {
         adminService.deleteSession(id);
         return new Response<>();
     }
 
     @PostMapping("/warmup/{sessionId}")
-    public Response<Void> warmupSession(@PathVariable(value = "sessionId") Integer sessionId) {
+    public Response<Void> warmupSession(@PathVariable Integer sessionId) {
         adminService.warmupSession(sessionId);
         return new Response<>();
     }
 
     @PostMapping("/open/{sessionId}")
-    public Response<Void> openSession(@PathVariable(value = "sessionId") Integer sessionId) {
+    public Response<Void> openSession(@PathVariable Integer sessionId) {
         adminService.openSession(sessionId);
         return new Response<>();
     }
 
     @PostMapping("/slot-gen/{sessionId}")
-    public Response<Void> generateSlot(@PathVariable(value = "sessionId") Integer sessionId) {
+    public Response<Void> generateSlot(@PathVariable Integer sessionId) {
         adminService.generateSlot(sessionId);
         return new Response<>();
     }
