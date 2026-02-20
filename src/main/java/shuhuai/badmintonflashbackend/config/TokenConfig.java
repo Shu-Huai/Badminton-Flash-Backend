@@ -19,15 +19,9 @@ public class TokenConfig {
     @Value("${token.privateKey}")
     private String privateKey;
 
-    /**
-     * 年轻Token过期时间（毫秒）
-     */
-    @Value("${token.youngToken}")
-    private Long youngToken;
+    @Value("${token.accessTokenTtl}")
+    private Long accessTokenTtl;
 
-    /**
-     * 旧Token过期时间（毫秒）
-     */
-    @Value("${token.oldToken}")
-    private Long oldToken;
+    @Value("${token.refreshTokenTtl}")
+    private Long refreshTokenTtl;
 }
