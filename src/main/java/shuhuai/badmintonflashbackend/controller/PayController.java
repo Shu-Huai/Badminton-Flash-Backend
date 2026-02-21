@@ -8,5 +8,5 @@ import shuhuai.badmintonflashbackend.enm.UserRole;
 @RestController
 @RequestMapping("/pay")
 @RequireRole(UserRole.USER)
-public class PayController extends BaseController{
+public class PayController {
 }
