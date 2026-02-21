@@ -38,8 +38,6 @@ public class AuthWebConfig implements WebMvcConfigurer {
                 .excludePathPatterns("/auth/login")
                 // 排除注册路径
                 .excludePathPatterns("/auth/register")
-                // 排除刷新路径
-                .excludePathPatterns("/auth/refresh")
                 // 排除协议路径
                 .excludePathPatterns("/user/protocol");
     }
