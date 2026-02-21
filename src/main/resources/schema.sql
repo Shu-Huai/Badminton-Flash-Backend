@@ -56,12 +56,12 @@ create table if not exists user_account
 (
     id          int auto_increment
         primary key,
-    student_id  varchar(31)                          not null,
-    create_time timestamp  default CURRENT_TIMESTAMP not null,
-    update_time timestamp  default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
-    is_active   tinyint(1) default 1                 not null,
-    password    varchar(255)                         not null,
-    user_role   varchar(31) default 'USER'           not null,
+    student_id  varchar(31)                           not null,
+    create_time timestamp   default CURRENT_TIMESTAMP not null,
+    update_time timestamp   default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
+    is_active   tinyint(1)  default 1                 not null,
+    password    varchar(255)                          not null,
+    user_role   varchar(31) default 'USER'            not null,
     constraint user_account_pk
         unique (student_id)
 );
@@ -82,4 +82,24 @@ create table if not exists reservation
         foreign key (slot_id) references time_slot (id),
     constraint reservation_user_id_fk
         foreign key (user_id) references user_account (id)
+);
+
+create table if not exists pay_order
+(
+    id             int auto_increment
+        primary key,
+    reservation_id int                                  not null,
+    out_trade_no   varchar(64)                          not null,
+    pay_channel    varchar(32)                          not null,
+    amount         decimal(10, 2)                       not null,
+    status         varchar(32)                          not null,
+    third_trade_no varchar(64)                          null,
+    expire_time    timestamp                            null,
+    create_time    timestamp  default CURRENT_TIMESTAMP not null,
+    update_time    timestamp  default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
+    is_active      tinyint(1) default 1                 not null,
+    constraint pay_order_out_trade_no_uq
+        unique (out_trade_no),
+    constraint pay_order_reservation_id_fk
+        foreign key (reservation_id) references reservation (id)
 );

@@ -10,6 +10,8 @@ public enum ConfigKey {
     WARMUP_MINUTE,
     // 未支付自动取消分钟数
     PAY_TIMEOUT_MINUTE,
+    // 支付金额（元）
+    PAY_AMOUNT,
     // 生成当天slot_time的时间
     GENERATE_TIME_SLOT_TIME,
     // 球场数量

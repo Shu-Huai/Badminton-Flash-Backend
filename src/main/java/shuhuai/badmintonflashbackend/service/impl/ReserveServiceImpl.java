@@ -13,9 +13,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import shuhuai.badmintonflashbackend.constant.MqNames;
 import shuhuai.badmintonflashbackend.constant.RedisKeys;
+import shuhuai.badmintonflashbackend.enm.PayOrderStatus;
 import shuhuai.badmintonflashbackend.enm.ReservationStatus;
+import shuhuai.badmintonflashbackend.entity.PayOrder;
 import shuhuai.badmintonflashbackend.entity.Reservation;
 import shuhuai.badmintonflashbackend.excep.BaseException;
+import shuhuai.badmintonflashbackend.mapper.IPayOrderMapper;
 import shuhuai.badmintonflashbackend.mapper.IReservationMapper;
 import shuhuai.badmintonflashbackend.mq.ReservePublishCallbackHandler;
 import shuhuai.badmintonflashbackend.mq.message.ReserveMessage;
@@ -38,16 +41,18 @@ public class ReserveServiceImpl implements IReserveService {
     private final RabbitTemplate rabbitTemplate;
     private final ReservePublishCallbackHandler publishCallbackHandler;
     private final IReservationMapper reservationMapper;
+    private final IPayOrderMapper payOrderMapper;
 
     @Autowired
     public ReserveServiceImpl(RedissonClient redisson, IRateLimitService rateLimitService,
                               RabbitTemplate rabbitTemplate, ReservePublishCallbackHandler publishCallbackHandler,
-                              IReservationMapper reservationMapper) {
+                              IReservationMapper reservationMapper, IPayOrderMapper payOrderMapper) {
         this.redisson = redisson;
         this.rateLimitService = rateLimitService;
         this.rabbitTemplate = rabbitTemplate;
         this.publishCallbackHandler = publishCallbackHandler;
         this.reservationMapper = reservationMapper;
+        this.payOrderMapper = payOrderMapper;
     }
 
     @Override
@@ -151,6 +156,7 @@ public class ReserveServiceImpl implements IReserveService {
         if (updated <= 0) {
             throw new BaseException(ResponseCode.FAILED);
         }
+        closePayingOrders(reservationId);
         releaseReserveResource(userId, reservation.getSlotId());
     }
 
@@ -171,7 +177,18 @@ public class ReserveServiceImpl implements IReserveService {
         if (updated <= 0) {
             return;
         }
+        closePayingOrders(reservationId);
         releaseReserveResource(reservation.getUserId(), reservation.getSlotId());
+    }
+
+    private void closePayingOrders(Integer reservationId) {
+        if (reservationId == null) {
+            return;
+        }
+        payOrderMapper.update(null, new LambdaUpdateWrapper<PayOrder>()
+                .set(PayOrder::getStatus, PayOrderStatus.CLOSED)
+                .eq(PayOrder::getReservationId, reservationId)
+                .eq(PayOrder::getStatus, PayOrderStatus.PAYING));
     }
 
     private void releaseReserveResource(Integer userId, Integer slotId) {
