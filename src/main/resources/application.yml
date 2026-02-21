@@ -6,6 +6,11 @@ spring:
         active: dev
     jackson:
         time-zone: ${app.timezone}
+    rabbitmq:
+        publisher-confirm-type: correlated
+        publisher-returns: true
+        template:
+            mandatory: true
 server:
     port: 25001
 logging:

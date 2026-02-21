@@ -34,7 +34,6 @@ public class WarmupScheduler {
     public void warmupNearFutureSlots() {
         // 读取提前分钟数（WARMUP_MINUTE）
         int warmupMinutes = Integer.parseInt(adminService.getConfigValue(ConfigKey.WARMUP_MINUTE));
-        LocalDate today = DateTimes.nowDate();
         LocalTime now = DateTimes.nowMinute();
         LocalTime upper = now.plusMinutes(warmupMinutes);
 
@@ -42,9 +41,6 @@ public class WarmupScheduler {
                 .ge(FlashSession::getFlashTime, now)
                 .le(FlashSession::getFlashTime, upper));
         for (FlashSession flashSession : flashSessions) {
-            if (isWarmupDone(today, flashSession.getId())) {
-                continue;
-            }
             adminService.warmupSession(flashSession);
         }
     }
@@ -64,9 +60,7 @@ public class WarmupScheduler {
             if ("1".equals(gate.get())) {
                 continue;
             }
-            if (!isWarmupDone(today, flashSession.getId())) {
-                adminService.warmupSession(flashSession);
-            }
+            adminService.warmupSession(flashSession);
             if (!isWarmupDone(today, flashSession.getId())) {
                 continue;
             }

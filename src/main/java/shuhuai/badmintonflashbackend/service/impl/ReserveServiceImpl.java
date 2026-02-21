@@ -5,29 +5,39 @@ import org.redisson.api.RSemaphore;
 import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import shuhuai.badmintonflashbackend.constant.MqNames;
 import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.excep.BaseException;
+import shuhuai.badmintonflashbackend.mq.ReservePublishCallbackHandler;
 import shuhuai.badmintonflashbackend.mq.message.ReserveMessage;
 import shuhuai.badmintonflashbackend.response.ResponseCode;
 import shuhuai.badmintonflashbackend.service.IRateLimitService;
 import shuhuai.badmintonflashbackend.service.IReserveService;
 
 import java.time.Duration;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ReserveServiceImpl implements IReserveService {
+    private static final long PUBLISH_CONFIRM_TIMEOUT_MS = 3000L;
+    private static final long PENDING_TTL_SECONDS = 300L;
+
     private final RedissonClient redisson;
     private final IRateLimitService rateLimitService;
     private final RabbitTemplate rabbitTemplate;
+    private final ReservePublishCallbackHandler publishCallbackHandler;
 
     @Autowired
-    public ReserveServiceImpl(RedissonClient redisson, IRateLimitService rateLimitService, RabbitTemplate rabbitTemplate) {
+    public ReserveServiceImpl(RedissonClient redisson, IRateLimitService rateLimitService,
+                              RabbitTemplate rabbitTemplate, ReservePublishCallbackHandler publishCallbackHandler) {
         this.redisson = redisson;
         this.rateLimitService = rateLimitService;
         this.rabbitTemplate = rabbitTemplate;
+        this.publishCallbackHandler = publishCallbackHandler;
     }
 
     @Override
@@ -66,18 +76,33 @@ public class ReserveServiceImpl implements IReserveService {
             throw new BaseException(ResponseCode.OUT_OF_STOCK);
         }
 
-        // MQ
-        ReserveMessage message = new ReserveMessage(userId, slotId, sessionId);
+        String traceId = UUID.randomUUID().toString();
+        redisson.getBucket(RedisKeys.reservePendingKey(traceId))
+                .set(userId + ":" + slotId, Duration.ofSeconds(PENDING_TTL_SECONDS));
+
+        ReserveMessage message = new ReserveMessage(userId, slotId, sessionId, traceId);
+        CorrelationData correlationData = new CorrelationData(traceId);
         try {
             rabbitTemplate.convertAndSend(
                     MqNames.RESERVE_EXCHANGE,
                     MqNames.RESERVE_ROUTING_KEY,
-                    message
+                    message,
+                    rawMessage -> {
+                        rawMessage.getMessageProperties().setMessageId(traceId);
+                        rawMessage.getMessageProperties().setHeader("traceId", traceId);
+                        return rawMessage;
+                    },
+                    correlationData
             );
+            CorrelationData.Confirm confirm = correlationData.getFuture()
+                    .get(PUBLISH_CONFIRM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (confirm == null || !confirm.isAck()) {
+                publishCallbackHandler.compensateByTraceId(traceId,
+                        "sync-confirm-failed:" + (confirm == null ? "null" : confirm.getReason()));
+                throw new BaseException(ResponseCode.FAILED);
+            }
         } catch (Exception e) {
-            // 发送失败：回滚去重与库存，避免名额被吞
-            dedup.remove(userId);
-            sem.release();
+            publishCallbackHandler.compensateByTraceId(traceId, "sync-send-exception");
             throw new BaseException(ResponseCode.FAILED);
         }
     }

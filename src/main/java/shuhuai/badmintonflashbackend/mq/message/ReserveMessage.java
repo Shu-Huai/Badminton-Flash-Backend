@@ -13,4 +13,5 @@ public class ReserveMessage implements Serializable {
     private Integer userId;
     private Integer slotId;
     private Integer sessionId;
+    private String traceId;
 }

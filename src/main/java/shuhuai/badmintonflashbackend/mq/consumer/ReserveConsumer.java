@@ -9,16 +9,19 @@ import shuhuai.badmintonflashbackend.constant.MqNames;
 import shuhuai.badmintonflashbackend.enm.ReservationStatus;
 import shuhuai.badmintonflashbackend.entity.Reservation;
 import shuhuai.badmintonflashbackend.mapper.IReservationMapper;
+import shuhuai.badmintonflashbackend.mq.ReservePublishCallbackHandler;
 import shuhuai.badmintonflashbackend.mq.message.ReserveMessage;
 
 @Slf4j
 @Component
 public class ReserveConsumer {
     private final IReservationMapper reservationMapper;
+    private final ReservePublishCallbackHandler publishCallbackHandler;
 
     @Autowired
-    public ReserveConsumer(IReservationMapper reservationMapper) {
+    public ReserveConsumer(IReservationMapper reservationMapper, ReservePublishCallbackHandler publishCallbackHandler) {
         this.reservationMapper = reservationMapper;
+        this.publishCallbackHandler = publishCallbackHandler;
     }
 
     @RabbitListener(queues = MqNames.RESERVE_QUEUE, containerFactory = "rabbitListenerContainerFactory")
@@ -31,9 +34,11 @@ public class ReserveConsumer {
             reservation.setSlotId(message.getSlotId());
             reservation.setStatus(ReservationStatus.PENDING_PAYMENT);
             reservationMapper.insert(reservation);
+            publishCallbackHandler.clearPending(message.getTraceId());
             log.info("预约成功落库 userId={}, slotId={}", message.getUserId(), message.getSlotId());
         } catch (DuplicateKeyException e) {
             // 基于 reservation(slot_id) 唯一约束幂等：重复消息视为已成功处理
+            publishCallbackHandler.clearPending(message.getTraceId());
             log.warn("幂等命中，重复消息已忽略 userId={}, slotId={}", message.getUserId(), message.getSlotId());
         } catch (Exception e) {
             log.error("预约入库失败: {}", e.getMessage(), e);
