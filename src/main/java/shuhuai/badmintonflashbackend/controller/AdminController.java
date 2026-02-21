@@ -21,7 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin")
 @RequireRole(UserRole.USER)
-public class AdminController extends BaseController {
+public class AdminController {
     private final AdminService adminService;
     private final IUserService userService;
 

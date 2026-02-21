@@ -12,7 +12,7 @@ import shuhuai.badmintonflashbackend.utils.TokenValidator;
 @RestController
 @RequestMapping("/user")
 @RequireRole(UserRole.USER)
-public class UserController extends BaseController {
+public class UserController {
     private final IUserService userService;
 
     public UserController(IUserService userService) {

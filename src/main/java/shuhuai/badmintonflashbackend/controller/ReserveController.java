@@ -12,7 +12,7 @@ import shuhuai.badmintonflashbackend.utils.TokenValidator;
 @RestController
 @RequestMapping("/reserve")
 @RequireRole(UserRole.USER)
-public class ReserveController extends BaseController {
+public class ReserveController {
     private final IReserveService reserveService;
 
     @Autowired
