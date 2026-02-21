@@ -9,25 +9,34 @@ import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.enm.ConfigKey;
 import shuhuai.badmintonflashbackend.entity.Config;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.entity.TimeSlot;
+import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.mapper.ConfigMapper;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
 import shuhuai.badmintonflashbackend.mapper.ITimeSlotMapper;
 import shuhuai.badmintonflashbackend.model.dto.ConfigDTO;
 import shuhuai.badmintonflashbackend.model.dto.ConfigItemDTO;
 import shuhuai.badmintonflashbackend.model.dto.FlashSessionDTO;
+import shuhuai.badmintonflashbackend.response.ResponseCode;
 import shuhuai.badmintonflashbackend.service.AdminService;
 import shuhuai.badmintonflashbackend.service.ITimeSlotService;
 import shuhuai.badmintonflashbackend.utils.DateTimes;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZonedDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -49,19 +58,122 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    @Transactional
     public void updateConfig(ConfigItemDTO configItemDTO) {
-        if (configItemDTO.getValue() == null) {
+        if (configItemDTO == null || configItemDTO.getConfigKey() == null || configItemDTO.getValue() == null) {
             return;
         }
-        configMapper.update(null, new LambdaUpdateWrapper<Config>()
-                .set(Config::getValue, configItemDTO.getValue())
-                .eq(Config::getConfigKey, configItemDTO.getConfigKey()));
+        updateConfig(new ConfigDTO(List.of(configItemDTO)));
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateConfig(ConfigDTO configDTO) {
+        if (configDTO == null || configDTO.getConfigItems() == null || configDTO.getConfigItems().isEmpty()) {
+            return;
+        }
+
+        int warmupMinutes;
+        LocalTime generateTime;
+        try {
+            warmupMinutes = Integer.parseInt(getConfigValue(ConfigKey.WARMUP_MINUTE));
+            generateTime = LocalTime.parse(getConfigValue(ConfigKey.GENERATE_TIME_SLOT_TIME));
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
         for (ConfigItemDTO configItemDTO : configDTO.getConfigItems()) {
-            updateConfig(configItemDTO);
+            if (configItemDTO == null || configItemDTO.getConfigKey() == null || configItemDTO.getValue() == null || configItemDTO.getValue().isEmpty()) {
+                continue;
+            }
+            try {
+                if (configItemDTO.getConfigKey() == ConfigKey.WARMUP_MINUTE) {
+                    warmupMinutes = Integer.parseInt(configItemDTO.getValue());
+                } else if (configItemDTO.getConfigKey() == ConfigKey.GENERATE_TIME_SLOT_TIME) {
+                    generateTime = LocalTime.parse(configItemDTO.getValue());
+                }
+            } catch (Exception e) {
+                throw new BaseException(ResponseCode.PARAM_ERROR);
+            }
+        }
+        if (warmupMinutes < 0) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        List<FlashSession> sessions = sessionMapper.selectList(null);
+        for (FlashSession session : sessions) {
+            if (session == null || session.getFlashTime() == null || session.getBeginTime() == null
+                    || session.getEndTime() == null || session.getSlotInterval() == null) {
+                throw new BaseException(ResponseCode.PARAM_ERROR);
+            }
+            validConfigSession(warmupMinutes, generateTime, session);
+        }
+
+        Set<ConfigKey> changedKeys = new HashSet<>();
+        for (ConfigItemDTO configItemDTO : configDTO.getConfigItems()) {
+            if (configItemDTO.getConfigKey() == null || configItemDTO.getValue() == null || configItemDTO.getValue().isEmpty()) {
+                continue;
+            }
+            Config current = configMapper.selectOne(new LambdaQueryWrapper<Config>()
+                    .eq(Config::getConfigKey, configItemDTO.getConfigKey()));
+            if (current != null && !Objects.equals(current.getValue(), configItemDTO.getValue())) {
+                changedKeys.add(configItemDTO.getConfigKey());
+            }
+            configMapper.update(null, new LambdaUpdateWrapper<Config>()
+                    .set(Config::getValue, configItemDTO.getValue())
+                    .eq(Config::getConfigKey, configItemDTO.getConfigKey()));
+        }
+        if (changedKeys.isEmpty()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                triggerConfigCompensation(changedKeys);
+            }
+        });
+    }
+
+    private void validConfigSession(int warmupMinutes, LocalTime generateTime, FlashSession session) {
+        if (!session.getBeginTime().isBefore(session.getEndTime())) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        if (session.getSlotInterval() <= 0) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        long spanMin = Duration.between(session.getBeginTime(), session.getEndTime()).toMinutes();
+        if (spanMin % session.getSlotInterval() != 0) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        if (session.getFlashTime().isAfter(session.getBeginTime())) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        long flashMinutes = session.getFlashTime().toSecondOfDay() / 60;
+        if (warmupMinutes < 0 || warmupMinutes > flashMinutes) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        LocalTime warmupTime = session.getFlashTime().minusMinutes(warmupMinutes);
+        if (generateTime.isAfter(warmupTime) || warmupTime.isAfter(session.getFlashTime())) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+    }
+
+    private void triggerConfigCompensation(Set<ConfigKey> changedKeys) {
+        if (changedKeys.isEmpty()) {
+            return;
+        }
+        if (changedKeys.contains(ConfigKey.GENERATE_TIME_SLOT_TIME)) {
+            for (FlashSession flashSession : getSessions()) {
+                generateSlot(flashSession.getId());
+            }
+        }
+        if (changedKeys.contains(ConfigKey.WARMUP_MINUTE)) {
+            int warmupMinutes = Integer.parseInt(getConfigValue(ConfigKey.WARMUP_MINUTE));
+            LocalTime now = DateTimes.nowTime();
+            for (FlashSession flashSession : getSessions()) {
+                if (now.isBefore(flashSession.getFlashTime().minusMinutes(warmupMinutes))) {
+                    continue;
+                }
+                warmupSession(flashSession);
+            }
         }
     }
 
@@ -81,6 +193,19 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public void addSession(FlashSessionDTO flashSessionDTO) {
         FlashSession flashSession = new FlashSession(flashSessionDTO);
+        int warmupMinutes;
+        LocalTime generateTime;
+        try {
+            warmupMinutes = Integer.parseInt(getConfigValue(ConfigKey.WARMUP_MINUTE));
+            generateTime = LocalTime.parse(getConfigValue(ConfigKey.GENERATE_TIME_SLOT_TIME));
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        if (flashSession.getFlashTime() == null || flashSession.getBeginTime() == null
+                || flashSession.getEndTime() == null || flashSession.getSlotInterval() == null) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        validConfigSession(warmupMinutes, generateTime, flashSession);
         sessionMapper.insert(flashSession);
         timeSlotService.addSessionHandler(flashSession.getId());
     }
@@ -88,6 +213,19 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public void updateSession(Integer id, FlashSessionDTO flashSessionDTO) {
         FlashSession flashSession = new FlashSession(flashSessionDTO);
+        int warmupMinutes;
+        LocalTime generateTime;
+        try {
+            warmupMinutes = Integer.parseInt(getConfigValue(ConfigKey.WARMUP_MINUTE));
+            generateTime = LocalTime.parse(getConfigValue(ConfigKey.GENERATE_TIME_SLOT_TIME));
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        if (flashSession.getFlashTime() == null || flashSession.getBeginTime() == null
+                || flashSession.getEndTime() == null || flashSession.getSlotInterval() == null) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        validConfigSession(warmupMinutes, generateTime, flashSession);
         flashSession.setId(id);
         sessionMapper.updateById(flashSession);
         timeSlotService.updateSessionHandler(id);
@@ -120,42 +258,70 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public void warmupSession(FlashSession session) {
+        LocalDate today = DateTimes.nowDate();
         long ttlSec = DateTimes.ttlToEndOfTodaySeconds();
-        List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
-                .eq(TimeSlot::getSessionId, session.getId())
-                .eq(TimeSlot::getSlotDate, DateTimes.nowDate()));
-        if (timeSlots.isEmpty()) {
+        RBucket<String> sessionDone = redisson.getBucket(RedisKeys.warmupSessionDoneKey(today, session.getId()));
+        if (sessionDone.isExists()) {
             return;
         }
-        for (TimeSlot timeSlot : timeSlots) {
-            Integer slotId = timeSlot.getId();
-            RBucket<Integer> slotSession = redisson.getBucket(RedisKeys.slotSessionKey(slotId));
-            slotSession.set(session.getId(), Duration.ofSeconds(ttlSec));
-            // 幂等：warmup:done:{slotId}
-            RBucket<String> warmFlag = redisson.getBucket(RedisKeys.warmupDoneKey(slotId));
-            boolean first = warmFlag.setIfAbsent("1", Duration.ofSeconds(ttlSec));
-            if (!first) {
-                // 该 slot 已预热过，跳过
-                continue;
-            }
-            // semaphore: sem:{slotId}（许可=1；若你有容量字段可替换）
-            RSemaphore semaphore = redisson.getSemaphore(RedisKeys.semKey(slotId));
-            semaphore.trySetPermits(1);
-            semaphore.expire(Duration.ofSeconds(ttlSec));
-            // 3) 清空并设置 TTL（为确保存在后能设置 TTL，做一次 add/remove）
-            RSet<Integer> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
-            dedup.delete();                          // 清空
-            dedup.add(-1);                           // 确保 key 存在
-            dedup.expire(Duration.ofSeconds(ttlSec));
+        RLock lock = redisson.getLock(RedisKeys.warmupSessionLockKey(today, session.getId()));
+        boolean locked;
+        try {
+            locked = lock.tryLock(0, 60, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
         }
-        RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
-        gate.set("0", Duration.ofSeconds(ttlSec));
+        if (!locked) {
+            return;
+        }
+        try {
+            if (sessionDone.isExists()) {
+                return;
+            }
+            List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
+                    .eq(TimeSlot::getSessionId, session.getId())
+                    .eq(TimeSlot::getSlotDate, today));
+            if (timeSlots.isEmpty()) {
+                return;
+            }
+            for (TimeSlot timeSlot : timeSlots) {
+                Integer slotId = timeSlot.getId();
+                RBucket<Integer> slotSession = redisson.getBucket(RedisKeys.slotSessionKey(slotId));
+                slotSession.set(session.getId(), Duration.ofSeconds(ttlSec));
+                // 幂等：warmup:done:{slotId}
+                RBucket<String> warmFlag = redisson.getBucket(RedisKeys.warmupDoneKey(slotId));
+                boolean first = warmFlag.setIfAbsent("1", Duration.ofSeconds(ttlSec));
+                if (!first) {
+                    // 该 slot 已预热过，跳过
+                    continue;
+                }
+                // semaphore: sem:{slotId}（许可=1；若你有容量字段可替换）
+                RSemaphore semaphore = redisson.getSemaphore(RedisKeys.semKey(slotId));
+                semaphore.trySetPermits(1);
+                semaphore.expire(Duration.ofSeconds(ttlSec));
+                // 3) 清空并设置 TTL（为确保存在后能设置 TTL，做一次 add/remove）
+                RSet<Integer> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
+                dedup.delete();                          // 清空
+                dedup.add(-1);                           // 确保 key 存在
+                dedup.expire(Duration.ofSeconds(ttlSec));
+            }
+            RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
+            if (!gate.isExists()) {
+                gate.set("0", Duration.ofSeconds(ttlSec));
+            }
 
-        long startEpoch = ZonedDateTime
-                .of(DateTimes.nowDate(), session.getFlashTime(), DateTimes.zone())
-                .toEpochSecond();
-        RBucket<Long> gateTime = redisson.getBucket(RedisKeys.gateTimeKey(session.getId()));
-        gateTime.set(startEpoch, Duration.ofSeconds(ttlSec));
+            long startEpoch = ZonedDateTime
+                    .of(DateTimes.nowDate(), session.getFlashTime(), DateTimes.zone())
+                    .toEpochSecond();
+            RBucket<Long> gateTime = redisson.getBucket(RedisKeys.gateTimeKey(session.getId()));
+            gateTime.set(startEpoch, Duration.ofSeconds(ttlSec));
+            sessionDone.set("1", Duration.ofSeconds(ttlSec));
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
     }
 
     @Override

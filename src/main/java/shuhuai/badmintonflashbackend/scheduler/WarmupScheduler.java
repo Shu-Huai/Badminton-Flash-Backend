@@ -34,17 +34,17 @@ public class WarmupScheduler {
     public void warmupNearFutureSlots() {
         // 读取提前分钟数（WARMUP_MINUTE）
         int warmupMinutes = Integer.parseInt(adminService.getConfigValue(ConfigKey.WARMUP_MINUTE));
-        // 当前分钟 + 提前分钟数 = 开始时间
-        LocalTime targetStart = DateTimes.nowMinute().plusMinutes(warmupMinutes);
-        // 查询所有开始时间为开始时间的场次
+        LocalDate today = DateTimes.nowDate();
+        LocalTime now = DateTimes.nowMinute();
+        LocalTime upper = now.plusMinutes(warmupMinutes);
+
         List<FlashSession> flashSessions = sessionMapper.selectList(Wrappers.<FlashSession>lambdaQuery()
-                .eq(FlashSession::getFlashTime, targetStart));
-        // 如果没有场次，直接返回
-        if (flashSessions.isEmpty()) {
-            return;
-        }
-        // 调用 AdminService 预热场次
+                .ge(FlashSession::getFlashTime, now)
+                .le(FlashSession::getFlashTime, upper));
         for (FlashSession flashSession : flashSessions) {
+            if (isWarmupDone(today, flashSession.getId())) {
+                continue;
+            }
             adminService.warmupSession(flashSession);
         }
     }
@@ -54,16 +54,27 @@ public class WarmupScheduler {
      */
     @Scheduled(cron = "0 * * * * ?", zone = "${app.timezone}")
     public void openGate() {
-        LocalTime nowMin = DateTimes.nowMinute();
+        LocalDate today = DateTimes.nowDate();
+        LocalTime now = DateTimes.nowTime();
         List<FlashSession> flashSessions = sessionMapper.selectList(Wrappers.<FlashSession>lambdaQuery()
-                .eq(FlashSession::getFlashTime, nowMin));
-        if (flashSessions.isEmpty()) {
-            return;
-        }
+                .le(FlashSession::getFlashTime, now));
         for (FlashSession flashSession : flashSessions) {
             // 闸门
             RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(flashSession.getId()));
+            if ("1".equals(gate.get())) {
+                continue;
+            }
+            if (!isWarmupDone(today, flashSession.getId())) {
+                adminService.warmupSession(flashSession);
+            }
+            if (!isWarmupDone(today, flashSession.getId())) {
+                continue;
+            }
             gate.set("1", Duration.ofSeconds(DateTimes.ttlToEndOfTodaySeconds()));
         }
+    }
+
+    private boolean isWarmupDone(LocalDate day, Integer sessionId) {
+        return redisson.getBucket(RedisKeys.warmupSessionDoneKey(day, sessionId)).isExists();
     }
 }

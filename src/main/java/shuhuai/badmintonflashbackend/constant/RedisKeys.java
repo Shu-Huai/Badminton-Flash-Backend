@@ -41,8 +41,18 @@ public class RedisKeys {
     }
 
     /** slotId 对应的预热完成标记 */
-    public static String warmupDoneKey(Integer sessionId) {
-        return PREFIX + "warmup:done:" + sessionId;
+    public static String warmupDoneKey(Integer slotId) {
+        return PREFIX + "warmup:done:" + slotId;
+    }
+
+    /** 指定日期 + session 的预热完成标记 */
+    public static String warmupSessionDoneKey(LocalDate day, Integer sessionId) {
+        return PREFIX + "warmup:done:" + DateTimes.yyyymmdd(day) + ":" + sessionId;
+    }
+
+    /** 指定日期 + session 的预热任务锁 */
+    public static String warmupSessionLockKey(LocalDate day, Integer sessionId) {
+        return PREFIX + "warmup:lock:" + DateTimes.yyyymmdd(day) + ":" + sessionId;
     }
 
     /** 指定日期 + session 的 slots 已生成标记 */
