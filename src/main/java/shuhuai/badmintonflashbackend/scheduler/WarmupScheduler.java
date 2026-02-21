@@ -10,7 +10,7 @@ import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.enm.ConfigKey;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
-import shuhuai.badmintonflashbackend.service.AdminService;
+import shuhuai.badmintonflashbackend.service.IAdminService;
 import shuhuai.badmintonflashbackend.utils.DateTimes;
 
 import java.time.*;
@@ -19,11 +19,11 @@ import java.util.List;
 @Component
 public class WarmupScheduler {
     private final IFlashSessionMapper sessionMapper;
-    private final AdminService adminService;
+    private final IAdminService adminService;
     private final RedissonClient redisson;
 
     @Autowired
-    public WarmupScheduler(IFlashSessionMapper sessionMapper, AdminService adminService, RedissonClient redisson) {
+    public WarmupScheduler(IFlashSessionMapper sessionMapper, IAdminService adminService, RedissonClient redisson) {
         this.sessionMapper = sessionMapper;
         this.adminService = adminService;
         this.redisson = redisson;

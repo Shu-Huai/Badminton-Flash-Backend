@@ -2,8 +2,8 @@ package shuhuai.badmintonflashbackend.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
-import shuhuai.badmintonflashbackend.entity.Court;
+import shuhuai.badmintonflashbackend.entity.Config;
 
 @Mapper
-public interface CourtMapper extends BaseMapper<Court> {
+public interface IConfigMapper extends BaseMapper<Config> {
 }

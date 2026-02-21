@@ -10,7 +10,7 @@ import shuhuai.badmintonflashbackend.entity.Court;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.entity.TimeSlot;
 import shuhuai.badmintonflashbackend.excep.BaseException;
-import shuhuai.badmintonflashbackend.mapper.CourtMapper;
+import shuhuai.badmintonflashbackend.mapper.ICourtMapper;
 import shuhuai.badmintonflashbackend.mapper.ITimeSlotMapper;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
 import shuhuai.badmintonflashbackend.response.ResponseCode;
@@ -26,11 +26,11 @@ import java.util.List;
 @Service
 public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> implements ITimeSlotService {
     private final IFlashSessionMapper flashSessionMapper;
-    private final CourtMapper courtMapper;
+    private final ICourtMapper courtMapper;
     private final ITimeSlotMapper timeSlotMapper;
 
     @Autowired
-    public TimeSlotServiceImpl(IFlashSessionMapper flashSessionMapper, CourtMapper courtMapper, ITimeSlotMapper timeSlotMapper) {
+    public TimeSlotServiceImpl(IFlashSessionMapper flashSessionMapper, ICourtMapper courtMapper, ITimeSlotMapper timeSlotMapper) {
         this.flashSessionMapper = flashSessionMapper;
         this.courtMapper = courtMapper;
         this.timeSlotMapper = timeSlotMapper;

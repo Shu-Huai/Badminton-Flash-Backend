@@ -11,7 +11,7 @@ import shuhuai.badmintonflashbackend.model.dto.ConfigItemDTO;
 import shuhuai.badmintonflashbackend.model.dto.FlashSessionDTO;
 import shuhuai.badmintonflashbackend.model.vo.UserAccountVO;
 import shuhuai.badmintonflashbackend.response.Response;
-import shuhuai.badmintonflashbackend.service.AdminService;
+import shuhuai.badmintonflashbackend.service.IAdminService;
 import shuhuai.badmintonflashbackend.service.IUserService;
 import shuhuai.badmintonflashbackend.utils.TokenValidator;
 
@@ -21,11 +21,11 @@ import java.util.List;
 @RequestMapping("/admin")
 @RequireRole(value = UserRole.ADMIN, dbCheck = true)
 public class AdminController {
-    private final AdminService adminService;
+    private final IAdminService adminService;
     private final IUserService userService;
 
     @Autowired
-    public AdminController(AdminService adminService, IUserService userService) {
+    public AdminController(IAdminService adminService, IUserService userService) {
         this.adminService = adminService;
         this.userService = userService;
     }
@@ -37,8 +37,7 @@ public class AdminController {
     }
 
     @PatchMapping("/system/{configKey}")
-    public Response<Void> updateSystemConfigValue(@PathVariable("configKey") ConfigKey configKey,
-                                                  @RequestBody String value) {
+    public Response<Void> updateSystemConfigValue(@PathVariable ConfigKey configKey, @RequestBody String value) {
         adminService.updateConfig(new ConfigItemDTO(configKey, value));
         return new Response<>();
     }
@@ -49,7 +48,7 @@ public class AdminController {
     }
 
     @GetMapping("/system/{configKey}")
-    public Response<String> getSystemConfigValue(@PathVariable("configKey") ConfigKey configKey) {
+    public Response<String> getSystemConfigValue(@PathVariable ConfigKey configKey) {
         return new Response<>(adminService.getConfigValue(configKey));
     }
 
@@ -60,32 +59,31 @@ public class AdminController {
     }
 
     @PatchMapping("/session/{id}")
-    public Response<Void> updateSession(@PathVariable("id") Integer id,
-                                        @RequestBody FlashSessionDTO flashSessionDTO) {
+    public Response<Void> updateSession(@PathVariable Integer id, @RequestBody FlashSessionDTO flashSessionDTO) {
         adminService.updateSession(id, flashSessionDTO);
         return new Response<>();
     }
 
     @DeleteMapping("/session/{id}")
-    public Response<Void> deleteSession(@PathVariable("id") Integer id) {
+    public Response<Void> deleteSession(@PathVariable Integer id) {
         adminService.deleteSession(id);
         return new Response<>();
     }
 
     @PostMapping("/warmup/{sessionId}")
-    public Response<Void> warmupSession(@PathVariable("sessionId") Integer sessionId) {
+    public Response<Void> warmupSession(@PathVariable Integer sessionId) {
         adminService.warmupSession(sessionId);
         return new Response<>();
     }
 
     @PostMapping("/open/{sessionId}")
-    public Response<Void> openSession(@PathVariable("sessionId") Integer sessionId) {
+    public Response<Void> openSession(@PathVariable Integer sessionId) {
         adminService.openSession(sessionId);
         return new Response<>();
     }
 
     @PostMapping("/slot-gen/{sessionId}")
-    public Response<Void> generateSlot(@PathVariable("sessionId") Integer sessionId) {
+    public Response<Void> generateSlot(@PathVariable Integer sessionId) {
         adminService.generateSlot(sessionId);
         return new Response<>();
     }
@@ -96,7 +94,7 @@ public class AdminController {
     }
 
     @GetMapping("/users/{id}")
-    public Response<UserAccountVO> getUser(@PathVariable("id") Integer id) {
+    public Response<UserAccountVO> getUser(@PathVariable Integer id) {
         return new Response<>(userService.getUser(id));
     }
 
@@ -108,14 +106,14 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{id}")
-    public Response<Void> updateUser(@PathVariable("id") Integer id, @RequestBody AdminUserDTO adminUserDTO) {
+    public Response<Void> updateUser(@PathVariable Integer id, @RequestBody AdminUserDTO adminUserDTO) {
         Integer operatorUserId = Integer.parseInt(TokenValidator.getUser().get("userId"));
         userService.adminUpdateUser(operatorUserId, id, adminUserDTO);
         return new Response<>();
     }
 
     @DeleteMapping("/users/{id}")
-    public Response<Void> deleteUser(@PathVariable("id") Integer id) {
+    public Response<Void> deleteUser(@PathVariable Integer id) {
         Integer operatorUserId = Integer.parseInt(TokenValidator.getUser().get("userId"));
         userService.adminDeleteUser(operatorUserId, id);
         return new Response<>();
