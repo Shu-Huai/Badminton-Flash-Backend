@@ -6,7 +6,9 @@ import com.baomidou.mybatisplus.annotation.TableLogic;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.model.dto.FlashSessionDTO;
+import shuhuai.badmintonflashbackend.response.ResponseCode;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -27,9 +29,13 @@ public class FlashSession {
     private Integer isActive;
 
     public FlashSession(FlashSessionDTO flashSessionDTO) {
-        this.flashTime = LocalTime.parse(flashSessionDTO.getFlashTime());
-        this.beginTime = LocalTime.parse(flashSessionDTO.getBeginTime());
-        this.endTime = LocalTime.parse(flashSessionDTO.getEndTime());
-        this.slotInterval = flashSessionDTO.getSlotInterval();
+        try {
+            this.flashTime = LocalTime.parse(flashSessionDTO.getFlashTime());
+            this.beginTime = LocalTime.parse(flashSessionDTO.getBeginTime());
+            this.endTime = LocalTime.parse(flashSessionDTO.getEndTime());
+            this.slotInterval = flashSessionDTO.getSlotInterval();
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
     }
 }
