@@ -26,4 +26,11 @@ public class ReserveController {
         reserveService.reserve(userId, reserveDTO.getSlotId(), reserveDTO.getSessionId());
         return new Response<>();
     }
+
+    @DeleteMapping("/{reservationId}")
+    public Response<Void> cancel(@PathVariable Integer reservationId) {
+        Integer userId = Integer.parseInt(TokenValidator.getUser().get("userId"));
+        reserveService.cancel(userId, reservationId);
+        return new Response<>();
+    }
 }

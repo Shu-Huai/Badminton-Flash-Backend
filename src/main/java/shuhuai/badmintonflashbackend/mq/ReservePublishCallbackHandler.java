@@ -10,14 +10,20 @@ import org.springframework.amqp.core.ReturnedMessage;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.stereotype.Component;
 import shuhuai.badmintonflashbackend.constant.RedisKeys;
+import shuhuai.badmintonflashbackend.entity.Reservation;
+import shuhuai.badmintonflashbackend.mapper.IReservationMapper;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 @Slf4j
 @Component
 public class ReservePublishCallbackHandler {
     private final RedissonClient redisson;
+    private final IReservationMapper reservationMapper;
 
-    public ReservePublishCallbackHandler(RedissonClient redisson) {
+    public ReservePublishCallbackHandler(RedissonClient redisson, IReservationMapper reservationMapper) {
         this.redisson = redisson;
+        this.reservationMapper = reservationMapper;
     }
 
     public void onConfirm(CorrelationData correlationData, boolean ack, String cause) {
@@ -62,6 +68,13 @@ public class ReservePublishCallbackHandler {
             userId = Integer.parseInt(parts[0]);
             slotId = Integer.parseInt(parts[1]);
         } catch (NumberFormatException e) {
+            return;
+        }
+        Reservation existed = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
+                .eq(Reservation::getSlotId, slotId));
+        if (existed != null) {
+            log.warn("预约发布补偿跳过：slot 已落库 traceId={}, reason={}, userId={}, slotId={}",
+                    traceId, reason, userId, slotId);
             return;
         }
         RSet<Integer> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
