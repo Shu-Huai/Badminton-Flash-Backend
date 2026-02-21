@@ -255,8 +255,14 @@ public class AdminServiceImpl implements IAdminService {
     public void warmupSession(FlashSession session) {
         LocalDate today = DateTimes.nowDate();
         long ttlSec = DateTimes.ttlToEndOfTodaySeconds();
+        List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
+                .eq(TimeSlot::getSessionId, session.getId())
+                .eq(TimeSlot::getSlotDate, today));
+        if (timeSlots.isEmpty()) {
+            return;
+        }
         RBucket<String> sessionDone = redisson.getBucket(RedisKeys.warmupSessionDoneKey(today, session.getId()));
-        if (sessionDone.isExists()) {
+        if (sessionDone.isExists() && isSessionWarmupComplete(session.getId(), timeSlots)) {
             return;
         }
         RLock lock = redisson.getLock(RedisKeys.warmupSessionLockKey(today, session.getId()));
@@ -271,35 +277,35 @@ public class AdminServiceImpl implements IAdminService {
             return;
         }
         try {
-            if (sessionDone.isExists()) {
-                return;
-            }
-            List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
-                    .eq(TimeSlot::getSessionId, session.getId())
-                    .eq(TimeSlot::getSlotDate, today));
-            if (timeSlots.isEmpty()) {
+            if (sessionDone.isExists() && isSessionWarmupComplete(session.getId(), timeSlots)) {
                 return;
             }
             for (TimeSlot timeSlot : timeSlots) {
                 Integer slotId = timeSlot.getId();
-                RBucket<Integer> slotSession = redisson.getBucket(RedisKeys.slotSessionKey(slotId));
-                slotSession.set(session.getId(), Duration.ofSeconds(ttlSec));
-                // 幂等：warmup:done:{slotId}
                 RBucket<String> warmFlag = redisson.getBucket(RedisKeys.warmupDoneKey(slotId));
-                boolean first = warmFlag.setIfAbsent("1", Duration.ofSeconds(ttlSec));
-                if (!first) {
-                    // 该 slot 已预热过，跳过
+
+                if (warmFlag.isExists() && isSlotWarmupComplete(slotId, session.getId())) {
                     continue;
                 }
-                // semaphore: sem:{slotId}（许可=1；若你有容量字段可替换）
+                RBucket<Integer> slotSession = redisson.getBucket(RedisKeys.slotSessionKey(slotId));
+                if (!slotSession.isExists()) {
+                    slotSession.set(session.getId(), Duration.ofSeconds(ttlSec));
+                }
                 RSemaphore semaphore = redisson.getSemaphore(RedisKeys.semKey(slotId));
-                semaphore.trySetPermits(1);
+                if (!semaphore.isExists()) {
+                    semaphore.trySetPermits(1);
+                }
                 semaphore.expire(Duration.ofSeconds(ttlSec));
-                // 3) 清空并设置 TTL（为确保存在后能设置 TTL，做一次 add/remove）
+
                 RSet<Integer> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
-                dedup.delete();                          // 清空
-                dedup.add(-1);                           // 确保 key 存在
+                if (!dedup.isExists()) {
+                    dedup.add(-1); // 占位，确保 key 存在
+                }
                 dedup.expire(Duration.ofSeconds(ttlSec));
+
+                warmFlag.set("1", Duration.ofSeconds(ttlSec));
+
+
             }
             RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
             if (!gate.isExists()) {
@@ -311,12 +317,44 @@ public class AdminServiceImpl implements IAdminService {
                     .toEpochSecond();
             RBucket<Long> gateTime = redisson.getBucket(RedisKeys.gateTimeKey(session.getId()));
             gateTime.set(startEpoch, Duration.ofSeconds(ttlSec));
-            sessionDone.set("1", Duration.ofSeconds(ttlSec));
+            if (isSessionWarmupComplete(session.getId(), timeSlots)) {
+                sessionDone.set("1", Duration.ofSeconds(ttlSec));
+            }
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
         }
+    }
+
+    private boolean isSessionWarmupComplete(Integer sessionId, List<TimeSlot> timeSlots) {
+        if (timeSlots == null || timeSlots.isEmpty()) {
+            return false;
+        }
+        for (TimeSlot timeSlot : timeSlots) {
+            if (!isSlotWarmupComplete(timeSlot.getId(), sessionId)) {
+                return false;
+            }
+        }
+        if (!redisson.getBucket(RedisKeys.gateKey(sessionId)).isExists()) {
+            return false;
+        }
+        return redisson.getBucket(RedisKeys.gateTimeKey(sessionId)).isExists();
+    }
+
+    private boolean isSlotWarmupComplete(Integer slotId, Integer sessionId) {
+        RBucket<Integer> slotSession = redisson.getBucket(RedisKeys.slotSessionKey(slotId));
+        Integer cachedSessionId = slotSession.get();
+        if (!sessionId.equals(cachedSessionId)) {
+            return false;
+        }
+        if (!redisson.getBucket(RedisKeys.warmupDoneKey(slotId)).isExists()) {
+            return false;
+        }
+        if (!redisson.getSemaphore(RedisKeys.semKey(slotId)).isExists()) {
+            return false;
+        }
+        return redisson.getSet(RedisKeys.dedupKey(slotId)).isExists();
     }
 
     @Override

@@ -70,6 +70,11 @@ public class RedisKeys {
         return PREFIX + "limit:" + userKey;
     }
 
+    /** 预约消息发布待确认补偿键 */
+    public static String reservePendingKey(String traceId) {
+        return PREFIX + "reserve:pending:" + traceId;
+    }
+
     /**
      * 计算距离当天 23:59:59 的秒数
      * @param day 目标日期
