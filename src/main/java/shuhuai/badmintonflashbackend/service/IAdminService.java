@@ -8,7 +8,7 @@ import shuhuai.badmintonflashbackend.model.dto.FlashSessionDTO;
 
 import java.util.List;
 
-public interface AdminService {
+public interface IAdminService {
     void updateConfig(ConfigItemDTO configItemDTO);
 
     void updateConfig(ConfigDTO configDTO);
@@ -24,8 +24,6 @@ public interface AdminService {
     void deleteSession(Integer id);
 
     List<FlashSession> getSessions();
-
-    FlashSession getSession(Integer id);
 
     void warmupSession(Integer sessionId);
 

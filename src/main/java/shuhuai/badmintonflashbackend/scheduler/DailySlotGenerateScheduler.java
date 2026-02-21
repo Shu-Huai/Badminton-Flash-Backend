@@ -5,7 +5,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import shuhuai.badmintonflashbackend.enm.ConfigKey;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
-import shuhuai.badmintonflashbackend.service.AdminService;
+import shuhuai.badmintonflashbackend.service.IAdminService;
 import shuhuai.badmintonflashbackend.utils.DateTimes;
 
 import java.time.LocalTime;
@@ -16,7 +16,7 @@ import java.time.LocalTime;
 @Component
 public class DailySlotGenerateScheduler {
     @Resource
-    private AdminService adminService;
+    private IAdminService adminService;
 
     /**
      * 每分钟执行一次，命中配置时间时生成

@@ -18,14 +18,14 @@ import shuhuai.badmintonflashbackend.entity.Config;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.entity.TimeSlot;
 import shuhuai.badmintonflashbackend.excep.BaseException;
-import shuhuai.badmintonflashbackend.mapper.ConfigMapper;
+import shuhuai.badmintonflashbackend.mapper.IConfigMapper;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
 import shuhuai.badmintonflashbackend.mapper.ITimeSlotMapper;
 import shuhuai.badmintonflashbackend.model.dto.ConfigDTO;
 import shuhuai.badmintonflashbackend.model.dto.ConfigItemDTO;
 import shuhuai.badmintonflashbackend.model.dto.FlashSessionDTO;
 import shuhuai.badmintonflashbackend.response.ResponseCode;
-import shuhuai.badmintonflashbackend.service.AdminService;
+import shuhuai.badmintonflashbackend.service.IAdminService;
 import shuhuai.badmintonflashbackend.service.ITimeSlotService;
 import shuhuai.badmintonflashbackend.utils.DateTimes;
 
@@ -40,15 +40,15 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Service
-public class AdminServiceImpl implements AdminService {
-    private final ConfigMapper configMapper;
+public class AdminServiceImpl implements IAdminService {
+    private final IConfigMapper configMapper;
     private final IFlashSessionMapper sessionMapper;
     private final ITimeSlotService timeSlotService;
     private final ITimeSlotMapper timeSlotMapper;
     private final RedissonClient redisson;
 
     @Autowired
-    public AdminServiceImpl(ConfigMapper configMapper, IFlashSessionMapper sessionMapper,
+    public AdminServiceImpl(IConfigMapper configMapper, IFlashSessionMapper sessionMapper,
                             ITimeSlotService timeSlotService, ITimeSlotMapper timeSlotMapper, RedissonClient redisson) {
         this.configMapper = configMapper;
         this.sessionMapper = sessionMapper;
@@ -240,11 +240,6 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public List<FlashSession> getSessions() {
         return sessionMapper.selectList(null);
-    }
-
-    @Override
-    public FlashSession getSession(Integer id) {
-        return sessionMapper.selectById(id);
     }
 
     @Override
