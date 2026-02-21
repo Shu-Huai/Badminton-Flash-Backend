@@ -10,6 +10,5 @@ import lombok.Setter;
 @AllArgsConstructor
 @Getter
 public class AuthTokenVO {
-    private String accessToken;
-    private String refreshToken;
+    private String token;
 }

@@ -2,7 +2,6 @@ package shuhuai.badmintonflashbackend.utils;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,6 +14,7 @@ import shuhuai.badmintonflashbackend.config.TokenConfig;
 import shuhuai.badmintonflashbackend.enm.UserRole;
 import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.response.ResponseCode;
+import shuhuai.badmintonflashbackend.service.IUserService;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -28,19 +28,21 @@ import java.util.Map;
  */
 @Component
 public class TokenValidator implements HandlerInterceptor {
-    private static final String TOKEN_TYPE_ACCESS = "access";
-    private static final String TOKEN_TYPE_REFRESH = "refresh";
+    private static final String CLAIM_USER_ID = "userId";
+    private static final String CLAIM_ROLE = "role";
+    private static final String CLAIM_ISSUED_AT = "issuedAt";
+    private static final String BEARER_PREFIX = "Bearer ";
     private final TokenConfig tokenConfig;
-
-    public TokenValidator(TokenConfig tokenConfig) {
-        this.tokenConfig = tokenConfig;
-    }
-
+    private final IUserService userService;
     /**
      * 线程本地存储，用于存储用户信息
      */
     private final static ThreadLocal<Map<String, String>> threadLocal = new ThreadLocal<>();
 
+    public TokenValidator(TokenConfig tokenConfig, IUserService userService) {
+        this.tokenConfig = tokenConfig;
+        this.userService = userService;
+    }
 
     /**
      * 获取当前线程的用户信息
@@ -73,30 +75,17 @@ public class TokenValidator implements HandlerInterceptor {
      * @param userId 用户ID
      * @return 生成的Token
      */
-    public String getAccessToken(Integer userId, String role) {
-        return buildToken(userId, role, TOKEN_TYPE_ACCESS, tokenConfig.getAccessTokenTtl());
-    }
-
-    public String getRefreshToken(Integer userId) {
-        return buildToken(userId, null, TOKEN_TYPE_REFRESH, tokenConfig.getRefreshTokenTtl());
-    }
-
-    private String buildToken(Integer userId, String role, String tokenType, Long ttlMillis) {
-        if (userId == null || ttlMillis == null || ttlMillis <= 0) {
+    public String getToken(Integer userId, UserRole role) {
+        if (userId == null || role == null) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
-        long now = System.currentTimeMillis();
-        Date issuedAt = new Date(now);
-        Date expiresAt = new Date(now + ttlMillis);
-        var builder = JWT.create()
-                .withClaim("userId", userId.toString())
-                .withClaim("tokenType", tokenType)
+        Date issuedAt = new Date();
+        return JWT.create()
+                .withClaim(CLAIM_USER_ID, userId.toString())
+                .withClaim(CLAIM_ROLE, role.name())
                 .withIssuedAt(issuedAt)
-                .withExpiresAt(expiresAt);
-        if (role != null && !role.isBlank()) {
-            builder.withClaim("role", role);
-        }
-        return builder.sign(Algorithm.HMAC256(tokenConfig.getPrivateKey()));
+                .withClaim(CLAIM_ISSUED_AT, issuedAt.getTime())
+                .sign(Algorithm.HMAC256(tokenConfig.getPrivateKey()));
     }
 
     /**
@@ -107,54 +96,28 @@ public class TokenValidator implements HandlerInterceptor {
      */
     public Map<String, String> parseToken(String token) {
         HashMap<String, String> map = new HashMap<>();
-        DecodedJWT decodedjwt = JWT.require(Algorithm.HMAC256(tokenConfig.getPrivateKey())).build().verify(token);
-        String userId = decodedjwt.getClaim("userId").asString();
-        String role = decodedjwt.getClaim("role").asString();
-        String tokenType = decodedjwt.getClaim("tokenType").asString();
-        Date issuedAt = decodedjwt.getIssuedAt();
-        if (userId == null || issuedAt == null) {
-            throw new BaseException(ResponseCode.TOKEN_INVALID);
-        }
-        if (tokenType == null || tokenType.isBlank()) {
-            tokenType = TOKEN_TYPE_ACCESS;
-        }
-        if (!TOKEN_TYPE_ACCESS.equals(tokenType) && !TOKEN_TYPE_REFRESH.equals(tokenType)) {
-            throw new BaseException(ResponseCode.TOKEN_INVALID);
-        }
-        if (role == null || role.isBlank()) {
-            role = UserRole.USER.name();
-        }
-        if (TOKEN_TYPE_ACCESS.equals(tokenType)) {
-            try {
-                UserRole.valueOf(role);
-            } catch (IllegalArgumentException e) {
-                throw new BaseException(ResponseCode.TOKEN_INVALID);
-            }
-        }
-        map.put("userId", userId);
-        map.put("role", role);
-        map.put("tokenType", tokenType);
-        map.put("issuedAt", String.valueOf(issuedAt.getTime()));
-        return map;
-    }
+        DecodedJWT decodedJWT = JWT.require(Algorithm.HMAC256(tokenConfig.getPrivateKey())).build().verify(token);
 
-    public Integer verifyRefreshToken(String token) {
-        Map<String, String> map;
+        String userId = decodedJWT.getClaim(CLAIM_USER_ID).asString();
+        String role = decodedJWT.getClaim(CLAIM_ROLE).asString();
+        Date issuedAt = decodedJWT.getIssuedAt();
+        Long issuedAtMillis = decodedJWT.getClaim(CLAIM_ISSUED_AT).asLong();
+        if (issuedAtMillis == null && issuedAt != null) {
+            issuedAtMillis = issuedAt.getTime();
+        }
+        if (userId == null || userId.isBlank() || role == null || role.isBlank() || issuedAtMillis == null) {
+            throw new BaseException(ResponseCode.TOKEN_INVALID);
+        }
         try {
-            map = parseToken(token);
-        } catch (TokenExpiredException e) {
-            throw new BaseException(ResponseCode.TOKEN_EXPIRED);
+            Integer.parseInt(userId);
+            UserRole.valueOf(role);
         } catch (Exception e) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
-        if (!TOKEN_TYPE_REFRESH.equals(map.get("tokenType"))) {
-            throw new BaseException(ResponseCode.TOKEN_INVALID);
-        }
-        try {
-            return Integer.parseInt(map.get("userId"));
-        } catch (NumberFormatException e) {
-            throw new BaseException(ResponseCode.TOKEN_INVALID);
-        }
+        map.put(CLAIM_USER_ID, userId);
+        map.put(CLAIM_ROLE, role);
+        map.put(CLAIM_ISSUED_AT, String.valueOf(issuedAtMillis));
+        return map;
     }
 
     /**
@@ -175,45 +138,53 @@ public class TokenValidator implements HandlerInterceptor {
         if (authorization == null || authorization.trim().isEmpty()) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
-        final String bearerPrefix = "Bearer ";
-        if (!authorization.startsWith(bearerPrefix)) {
+        if (!authorization.startsWith(BEARER_PREFIX)) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
-        String token = authorization.substring(bearerPrefix.length()).trim();
+        String token = authorization.substring(BEARER_PREFIX.length()).trim();
         if (token.isEmpty() || token.contains(" ")) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
-
         Map<String, String> map;
         try {
             map = parseToken(token);
-        } catch (TokenExpiredException e) {
-            throw new BaseException(ResponseCode.TOKEN_EXPIRED);
         } catch (Exception e) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
-        if (!TOKEN_TYPE_ACCESS.equals(map.get("tokenType"))) {
-            throw new BaseException(ResponseCode.TOKEN_INVALID);
-        }
-        try {
-            Integer.parseInt(map.get("userId"));
-        } catch (NumberFormatException e) {
-            throw new BaseException(ResponseCode.TOKEN_INVALID);
-        }
-        String role = map.get("role");
 
-        UserRole[] requiredRoles = getRequiredRoles(handlerMethod);
-        if (requiredRoles.length > 0) {
-            UserRole currentRole;
-            try {
-                currentRole = UserRole.valueOf(role);
-            } catch (IllegalArgumentException e) {
-                throw new BaseException(ResponseCode.TOKEN_INVALID);
-            }
-            boolean permitted = Arrays.stream(requiredRoles).anyMatch(requiredRole -> hasRole(currentRole, requiredRole));
+        long timeOfUse;
+        try {
+            long issuedAtMillis = Long.parseLong(map.get(CLAIM_ISSUED_AT));
+            timeOfUse = System.currentTimeMillis() - issuedAtMillis;
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.TOKEN_INVALID);
+        }
+        if (timeOfUse >= tokenConfig.getYoungToken() && timeOfUse < tokenConfig.getOldToken()) {
+            Integer userId = Integer.parseInt(map.get(CLAIM_USER_ID));
+            UserRole role = UserRole.valueOf(map.get(CLAIM_ROLE));
+            httpServletResponse.setHeader("Authorization", BEARER_PREFIX + getToken(userId, role));
+        } else if (timeOfUse >= tokenConfig.getOldToken()) {
+            throw new BaseException(ResponseCode.TOKEN_EXPIRED);
+        }
+
+        Integer userId = Integer.parseInt(map.get(CLAIM_USER_ID));
+        RoleRequirement requirement = getRoleRequirement(handlerMethod);
+        if (requirement.roles().length > 0) {
+            UserRole currentRole = UserRole.valueOf(map.get(CLAIM_ROLE));
+            boolean permitted = Arrays.stream(requirement.roles())
+                    .anyMatch(requiredRole -> hasRole(currentRole, requiredRole));
             if (!permitted) {
                 throw new BaseException(ResponseCode.FORBIDDEN);
             }
+        }
+        if (requirement.dbCheck() && requirement.roles().length > 0) {
+            UserRole dbRole = userService.getRole(userId);
+            boolean dbPermitted = Arrays.stream(requirement.roles())
+                    .anyMatch(requiredRole -> hasRole(dbRole, requiredRole));
+            if (!dbPermitted) {
+                throw new BaseException(ResponseCode.FORBIDDEN);
+            }
+            map.put(CLAIM_ROLE, dbRole.name());
         }
         setUser(map);
         return true;
@@ -226,16 +197,19 @@ public class TokenValidator implements HandlerInterceptor {
         return currentRole == UserRole.ADMIN && requiredRole == UserRole.USER;
     }
 
-    private UserRole[] getRequiredRoles(HandlerMethod handlerMethod) {
+    private RoleRequirement getRoleRequirement(HandlerMethod handlerMethod) {
         RequireRole methodAnnotation = handlerMethod.getMethodAnnotation(RequireRole.class);
         if (methodAnnotation != null) {
-            return methodAnnotation.value();
+            return new RoleRequirement(methodAnnotation.value(), methodAnnotation.dbCheck());
         }
         RequireRole classAnnotation = handlerMethod.getBeanType().getAnnotation(RequireRole.class);
         if (classAnnotation != null) {
-            return classAnnotation.value();
+            return new RoleRequirement(classAnnotation.value(), classAnnotation.dbCheck());
         }
-        return new UserRole[0];
+        return new RoleRequirement(new UserRole[0], false);
+    }
+
+    private record RoleRequirement(UserRole[] roles, boolean dbCheck) {
     }
 
     @Override

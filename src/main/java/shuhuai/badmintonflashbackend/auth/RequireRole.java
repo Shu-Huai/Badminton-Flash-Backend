@@ -11,4 +11,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequireRole {
     UserRole[] value();
+
+    boolean dbCheck() default false;
 }

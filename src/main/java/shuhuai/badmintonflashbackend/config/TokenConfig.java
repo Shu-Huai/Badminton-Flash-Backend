@@ -19,9 +19,9 @@ public class TokenConfig {
     @Value("${token.privateKey}")
     private String privateKey;
 
-    @Value("${token.accessTokenTtl}")
-    private Long accessTokenTtl;
+    @Value("${token.youngToken}")
+    private Long youngToken;
 
-    @Value("${token.refreshTokenTtl}")
-    private Long refreshTokenTtl;
+    @Value("${token.oldToken}")
+    private Long oldToken;
 }
