@@ -2,10 +2,12 @@ package shuhuai.badmintonflashbackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.entity.Court;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.entity.TimeSlot;
@@ -28,12 +30,15 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
     private final IFlashSessionMapper flashSessionMapper;
     private final ICourtMapper courtMapper;
     private final ITimeSlotMapper timeSlotMapper;
+    private final RedissonClient redisson;
 
     @Autowired
-    public TimeSlotServiceImpl(IFlashSessionMapper flashSessionMapper, ICourtMapper courtMapper, ITimeSlotMapper timeSlotMapper) {
+    public TimeSlotServiceImpl(IFlashSessionMapper flashSessionMapper, ICourtMapper courtMapper,
+                               ITimeSlotMapper timeSlotMapper, RedissonClient redisson) {
         this.flashSessionMapper = flashSessionMapper;
         this.courtMapper = courtMapper;
         this.timeSlotMapper = timeSlotMapper;
+        this.redisson = redisson;
     }
 
     @Override
@@ -106,8 +111,28 @@ public class TimeSlotServiceImpl extends ServiceImpl<ITimeSlotMapper, TimeSlot> 
         if (flashSession.getBeginTime().isBefore(DateTimes.nowTime())) {
             return;
         }
+        List<TimeSlot> toDeleteSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
+                .eq(TimeSlot::getSessionId, sessionId)
+                .eq(TimeSlot::getSlotDate, DateTimes.nowDate()));
         // 如果晚于
         timeSlotMapper.delete(new LambdaQueryWrapper<TimeSlot>().eq(TimeSlot::getSessionId, sessionId)
                 .eq(TimeSlot::getSlotDate, DateTimes.nowDate()));
+        cleanupReserveRedisBySlots(toDeleteSlots);
+    }
+
+    private void cleanupReserveRedisBySlots(List<TimeSlot> slots) {
+        if (slots == null || slots.isEmpty()) {
+            return;
+        }
+        for (TimeSlot slot : slots) {
+            Integer slotId = slot.getId();
+            if (slotId == null) {
+                continue;
+            }
+            redisson.getBucket(RedisKeys.slotSessionKey(slotId)).delete();
+            redisson.getSemaphore(RedisKeys.semKey(slotId)).delete();
+            redisson.getSet(RedisKeys.dedupKey(slotId)).delete();
+            redisson.getBucket(RedisKeys.warmupDoneKey(slotId)).delete();
+        }
     }
 }

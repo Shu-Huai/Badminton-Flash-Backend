@@ -1,5 +1,6 @@
 package shuhuai.badmintonflashbackend.mq.consumer;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -37,9 +38,16 @@ public class ReserveConsumer {
             publishCallbackHandler.clearPending(message.getTraceId());
             log.info("预约成功落库 userId={}, slotId={}", message.getUserId(), message.getSlotId());
         } catch (DuplicateKeyException e) {
-            // 基于 reservation(slot_id) 唯一约束幂等：重复消息视为已成功处理
+            Reservation existed = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
+                    .eq(Reservation::getSlotId, message.getSlotId()));
             publishCallbackHandler.clearPending(message.getTraceId());
-            log.warn("幂等命中，重复消息已忽略 userId={}, slotId={}", message.getUserId(), message.getSlotId());
+            if (existed != null && message.getUserId() != null && message.getUserId().equals(existed.getUserId())) {
+                // 同一用户 + 同一 slot：可视为消息重复投递（幂等）
+                log.warn("幂等命中，重复消息已忽略 userId={}, slotId={}", message.getUserId(), message.getSlotId());
+                return;
+            }
+            // 不同用户冲突到同一 slot：这是业务冲突，不是幂等成功
+            log.warn("slot 已被占用，消息按业务冲突处理 userId={}, slotId={}", message.getUserId(), message.getSlotId());
         } catch (Exception e) {
             log.error("预约入库失败: {}", e.getMessage(), e);
             // 可手动重试或丢入死信队列

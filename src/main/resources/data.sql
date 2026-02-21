@@ -13,6 +13,13 @@ WHERE NOT EXISTS (
     SELECT 1 FROM config WHERE config_key = 'GENERATE_TIME_SLOT_TIME'
 );
 
+INSERT INTO config (config_key, value)
+SELECT 'PAY_TIMEOUT_MINUTE', '15'
+FROM DUAL
+WHERE NOT EXISTS (
+    SELECT 1 FROM config WHERE config_key = 'PAY_TIMEOUT_MINUTE'
+);
+
 INSERT INTO user_account (student_id, password, user_role)
 SELECT 'root', '5A31893BE1B474502A046E74841E119B', 'ADMIN'
 FROM DUAL

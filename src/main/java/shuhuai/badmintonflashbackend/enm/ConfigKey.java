@@ -8,6 +8,8 @@ package shuhuai.badmintonflashbackend.enm;
 public enum ConfigKey {
     // 预热提前的分钟数
     WARMUP_MINUTE,
+    // 未支付自动取消分钟数
+    PAY_TIMEOUT_MINUTE,
     // 生成当天slot_time的时间
     GENERATE_TIME_SLOT_TIME,
     // 球场数量
