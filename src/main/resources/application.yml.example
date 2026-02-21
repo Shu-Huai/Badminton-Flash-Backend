@@ -30,3 +30,13 @@ token:
     youngToken: 1000000
     # Refresh Token过期时间（毫秒）
     oldToken: 3000000000
+
+wechat:
+    pay:
+        appId: wx_mock_app_id
+        mchId: mock_mch_id
+        notifyUrl: https://example.com/pay/wechat/callback
+        apiV3Key: mock_api_v3_key
+        privateKeyPath: classpath:cert/apiclient_key.pem
+        merchantSerialNumber: mock_serial_number
+        autoMockSuccess: false

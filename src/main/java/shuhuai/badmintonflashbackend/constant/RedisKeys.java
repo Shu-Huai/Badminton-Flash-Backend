@@ -75,6 +75,11 @@ public class RedisKeys {
         return PREFIX + "reserve:pending:" + traceId;
     }
 
+    /** reservationId 维度支付创建锁 */
+    public static String payCreateLockKey(Integer reservationId) {
+        return PREFIX + "pay:create:lock:" + reservationId;
+    }
+
     /**
      * 计算距离当天 23:59:59 的秒数
      * @param day 目标日期
