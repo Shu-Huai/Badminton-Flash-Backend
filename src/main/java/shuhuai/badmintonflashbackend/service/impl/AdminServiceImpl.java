@@ -2,6 +2,8 @@ package shuhuai.badmintonflashbackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.redisson.api.RBucket;
 import org.redisson.api.RLock;
 import org.redisson.api.RSemaphore;
@@ -15,10 +17,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.enm.ConfigKey;
 import shuhuai.badmintonflashbackend.entity.Config;
+import shuhuai.badmintonflashbackend.entity.Court;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.entity.TimeSlot;
 import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.mapper.IConfigMapper;
+import shuhuai.badmintonflashbackend.mapper.ICourtMapper;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
 import shuhuai.badmintonflashbackend.mapper.ITimeSlotMapper;
 import shuhuai.badmintonflashbackend.model.dto.ConfigDTO;
@@ -33,6 +37,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -41,16 +46,21 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class AdminServiceImpl implements IAdminService {
+    private static final String DEFAULT_COURT_NAME_FORMAT = "球场%d";
+    private static final Logger log = LoggerFactory.getLogger(AdminServiceImpl.class);
+
     private final IConfigMapper configMapper;
+    private final ICourtMapper courtMapper;
     private final IFlashSessionMapper sessionMapper;
     private final ITimeSlotService timeSlotService;
     private final ITimeSlotMapper timeSlotMapper;
     private final RedissonClient redisson;
 
     @Autowired
-    public AdminServiceImpl(IConfigMapper configMapper, IFlashSessionMapper sessionMapper,
+    public AdminServiceImpl(IConfigMapper configMapper, ICourtMapper courtMapper, IFlashSessionMapper sessionMapper,
                             ITimeSlotService timeSlotService, ITimeSlotMapper timeSlotMapper, RedissonClient redisson) {
         this.configMapper = configMapper;
+        this.courtMapper = courtMapper;
         this.sessionMapper = sessionMapper;
         this.timeSlotService = timeSlotService;
         this.timeSlotMapper = timeSlotMapper;
@@ -75,12 +85,18 @@ public class AdminServiceImpl implements IAdminService {
 
         int warmupMinutes;
         LocalTime generateTime;
+        int courtCount;
+        String courtNameFormat;
         try {
             warmupMinutes = Integer.parseInt(getConfigValue(ConfigKey.WARMUP_MINUTE));
             generateTime = LocalTime.parse(getConfigValue(ConfigKey.GENERATE_TIME_SLOT_TIME));
+            courtCount = getConfigIntOrDefault(ConfigKey.COURT_COUNT, countActiveCourts());
+            courtNameFormat = getConfigStringOrDefault(ConfigKey.COURT_NAME_FORMAT, DEFAULT_COURT_NAME_FORMAT);
         } catch (Exception e) {
             throw new BaseException(ResponseCode.PARAM_ERROR);
         }
+        int previousCourtCount = courtCount;
+        String previousCourtNameFormat = courtNameFormat;
         for (ConfigItemDTO configItemDTO : configDTO.getConfigItems()) {
             if (configItemDTO == null || configItemDTO.getConfigKey() == null || configItemDTO.getValue() == null || configItemDTO.getValue().isEmpty()) {
                 continue;
@@ -90,6 +106,10 @@ public class AdminServiceImpl implements IAdminService {
                     warmupMinutes = Integer.parseInt(configItemDTO.getValue());
                 } else if (configItemDTO.getConfigKey() == ConfigKey.GENERATE_TIME_SLOT_TIME) {
                     generateTime = LocalTime.parse(configItemDTO.getValue());
+                } else if (configItemDTO.getConfigKey() == ConfigKey.COURT_COUNT) {
+                    courtCount = Integer.parseInt(configItemDTO.getValue());
+                } else if (configItemDTO.getConfigKey() == ConfigKey.COURT_NAME_FORMAT) {
+                    courtNameFormat = configItemDTO.getValue();
                 }
             } catch (Exception e) {
                 throw new BaseException(ResponseCode.PARAM_ERROR);
@@ -106,6 +126,13 @@ public class AdminServiceImpl implements IAdminService {
             }
             validConfigSession(warmupMinutes, generateTime, session);
         }
+        validCourtConfig(courtCount, courtNameFormat);
+        if (courtCount != previousCourtCount && !canUpdateCourtCountNow(sessions, warmupMinutes)) {
+            throw new BaseException(ResponseCode.COURT_COUNT_UPDATE_WINDOW_CLOSED);
+        }
+        if (courtCount != previousCourtCount || !Objects.equals(courtNameFormat, previousCourtNameFormat)) {
+            syncCourts(courtCount, courtNameFormat);
+        }
 
         Set<ConfigKey> changedKeys = new HashSet<>();
         for (ConfigItemDTO configItemDTO : configDTO.getConfigItems()) {
@@ -114,12 +141,10 @@ public class AdminServiceImpl implements IAdminService {
             }
             Config current = configMapper.selectOne(new LambdaQueryWrapper<Config>()
                     .eq(Config::getConfigKey, configItemDTO.getConfigKey()));
-            if (current != null && !Objects.equals(current.getValue(), configItemDTO.getValue())) {
+            if (current == null || !Objects.equals(current.getValue(), configItemDTO.getValue())) {
                 changedKeys.add(configItemDTO.getConfigKey());
             }
-            configMapper.update(null, new LambdaUpdateWrapper<Config>()
-                    .set(Config::getValue, configItemDTO.getValue())
-                    .eq(Config::getConfigKey, configItemDTO.getConfigKey()));
+            upsertConfigValue(configItemDTO.getConfigKey(), configItemDTO.getValue());
         }
         if (changedKeys.isEmpty()) {
             return;
@@ -164,6 +189,9 @@ public class AdminServiceImpl implements IAdminService {
             for (FlashSession flashSession : getSessions()) {
                 generateSlot(flashSession.getId());
             }
+        }
+        if (changedKeys.contains(ConfigKey.COURT_COUNT)) {
+            regenerateTodaySlotsForAllSessions();
         }
         if (changedKeys.contains(ConfigKey.WARMUP_MINUTE)) {
             int warmupMinutes = Integer.parseInt(getConfigValue(ConfigKey.WARMUP_MINUTE));
@@ -404,5 +432,217 @@ public class AdminServiceImpl implements IAdminService {
                 lock.unlock();
             }
         }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void reconcileCourtsByConfigAtStartup() {
+        int warmupMinutes;
+        int targetCourtCount;
+        String courtNameFormat;
+        try {
+            warmupMinutes = Integer.parseInt(getConfigValue(ConfigKey.WARMUP_MINUTE));
+            targetCourtCount = getConfigIntOrDefault(ConfigKey.COURT_COUNT, countActiveCourts());
+            courtNameFormat = getConfigStringOrDefault(ConfigKey.COURT_NAME_FORMAT, DEFAULT_COURT_NAME_FORMAT);
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        validCourtConfig(targetCourtCount, courtNameFormat);
+        upsertConfigValue(ConfigKey.COURT_COUNT, String.valueOf(targetCourtCount));
+        upsertConfigValue(ConfigKey.COURT_NAME_FORMAT, courtNameFormat);
+
+        List<Court> currentCourts = getActiveCourtsById();
+        boolean countMismatched = currentCourts.size() != targetCourtCount;
+        boolean nameMismatched = isCourtNameMismatched(currentCourts, courtNameFormat, targetCourtCount);
+        if (!countMismatched && !nameMismatched) {
+            return;
+        }
+
+        List<FlashSession> sessions = getSessions();
+        if (!canUpdateCourtCountNow(sessions, warmupMinutes)) {
+            log.warn("启动对账发现球场配置不一致，但当前已过可变更窗口，跳过修复: targetCount={}, actualCount={}, nameMismatched={}",
+                    targetCourtCount, currentCourts.size(), nameMismatched);
+            return;
+        }
+
+        syncCourts(targetCourtCount, courtNameFormat);
+        if (countMismatched) {
+            regenerateTodaySlotsForAllSessions();
+        }
+        log.info("启动球场配置对账完成: targetCount={}, nameFormat={}", targetCourtCount, courtNameFormat);
+    }
+
+    private void upsertConfigValue(ConfigKey configKey, String value) {
+        Config current = configMapper.selectOne(new LambdaQueryWrapper<Config>()
+                .eq(Config::getConfigKey, configKey));
+        if (current == null) {
+            configMapper.insert(new Config(new ConfigItemDTO(configKey, value)));
+            return;
+        }
+        configMapper.update(null, new LambdaUpdateWrapper<Config>()
+                .set(Config::getValue, value)
+                .eq(Config::getConfigKey, configKey));
+    }
+
+    private int getConfigIntOrDefault(ConfigKey configKey, int defaultValue) {
+        String configValue = getConfigStringOrDefault(configKey, null);
+        if (configValue == null) {
+            return defaultValue;
+        }
+        return Integer.parseInt(configValue);
+    }
+
+    private String getConfigStringOrDefault(ConfigKey configKey, String defaultValue) {
+        Config config = configMapper.selectOne(new LambdaQueryWrapper<Config>()
+                .eq(Config::getConfigKey, configKey));
+        if (config == null || config.getValue() == null || config.getValue().isEmpty()) {
+            return defaultValue;
+        }
+        return config.getValue();
+    }
+
+    private int countActiveCourts() {
+        return courtMapper.selectCount(null).intValue();
+    }
+
+    private void validCourtConfig(int courtCount, String courtNameFormat) {
+        if (courtCount < 0 || courtNameFormat == null || !courtNameFormat.contains("%d")) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        Set<String> names = new HashSet<>();
+        try {
+            for (int i = 1; i <= courtCount; i++) {
+                names.add(String.format(courtNameFormat, i));
+            }
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        if (names.size() != courtCount) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+    }
+
+    private boolean canUpdateCourtCountNow(List<FlashSession> sessions, int warmupMinutes) {
+        if (sessions == null || sessions.isEmpty()) {
+            return true;
+        }
+        LocalTime firstWarmup = null;
+        for (FlashSession session : sessions) {
+            if (session == null || session.getFlashTime() == null) {
+                continue;
+            }
+            LocalTime warmupTime = session.getFlashTime().minusMinutes(warmupMinutes);
+            if (firstWarmup == null || warmupTime.isBefore(firstWarmup)) {
+                firstWarmup = warmupTime;
+            }
+        }
+        if (firstWarmup == null) {
+            return true;
+        }
+        return DateTimes.nowTime().isBefore(firstWarmup);
+    }
+
+    private void syncCourts(int targetCount, String courtNameFormat) {
+        List<Court> activeCourts = getActiveCourtsById();
+        int currentCount = activeCourts.size();
+        if (currentCount < targetCount) {
+            for (int i = currentCount + 1; i <= targetCount; i++) {
+                Court court = new Court();
+                court.setCourtName(String.format(courtNameFormat, i));
+                courtMapper.insert(court);
+            }
+            activeCourts = getActiveCourtsById();
+        } else if (currentCount > targetCount) {
+            for (int i = targetCount; i < currentCount; i++) {
+                courtMapper.deleteById(activeCourts.get(i).getId());
+            }
+            activeCourts = getActiveCourtsById();
+        }
+        for (int i = 0; i < activeCourts.size(); i++) {
+            Court court = activeCourts.get(i);
+            String targetName = String.format(courtNameFormat, i + 1);
+            if (Objects.equals(targetName, court.getCourtName())) {
+                continue;
+            }
+            courtMapper.update(null, new LambdaUpdateWrapper<Court>()
+                    .set(Court::getCourtName, targetName)
+                    .eq(Court::getId, court.getId()));
+        }
+    }
+
+    private List<Court> getActiveCourtsById() {
+        List<Court> courts = courtMapper.selectList(new LambdaQueryWrapper<Court>().orderByAsc(Court::getId));
+        return courts == null ? new ArrayList<>() : courts;
+    }
+
+    private void regenerateTodaySlotsForAllSessions() {
+        List<FlashSession> sessions = getSessions();
+        if (sessions == null || sessions.isEmpty()) {
+            return;
+        }
+        LocalDate today = DateTimes.nowDate();
+        for (FlashSession session : sessions) {
+            regenerateTodaySlotsForSession(today, session.getId());
+        }
+    }
+
+    private void regenerateTodaySlotsForSession(LocalDate day, Integer sessionId) {
+        RLock lock = redisson.getLock(RedisKeys.slotGenLockKey(day, sessionId));
+        boolean locked;
+        try {
+            locked = lock.tryLock(0, 120, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        if (!locked) {
+            return;
+        }
+        try {
+            List<TimeSlot> oldSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
+                    .eq(TimeSlot::getSessionId, sessionId)
+                    .eq(TimeSlot::getSlotDate, day));
+            timeSlotMapper.delete(new LambdaQueryWrapper<TimeSlot>()
+                    .eq(TimeSlot::getSessionId, sessionId)
+                    .eq(TimeSlot::getSlotDate, day));
+            cleanupReserveRedisBySlots(oldSlots);
+            redisson.getBucket(RedisKeys.slotGenDoneKey(day, sessionId)).delete();
+            redisson.getBucket(RedisKeys.warmupSessionDoneKey(day, sessionId)).delete();
+            redisson.getBucket(RedisKeys.gateKey(sessionId)).delete();
+            redisson.getBucket(RedisKeys.gateTimeKey(sessionId)).delete();
+            timeSlotService.generateForDate(day, sessionId);
+            long ttl = Math.max(DateTimes.ttlToEndOfDaySeconds(day), 60L);
+            redisson.getBucket(RedisKeys.slotGenDoneKey(day, sessionId)).set("1", Duration.ofSeconds(ttl));
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    private void cleanupReserveRedisBySlots(List<TimeSlot> slots) {
+        if (slots == null || slots.isEmpty()) {
+            return;
+        }
+        for (TimeSlot slot : slots) {
+            if (slot == null || slot.getId() == null) {
+                continue;
+            }
+            Integer slotId = slot.getId();
+            redisson.getBucket(RedisKeys.slotSessionKey(slotId)).delete();
+            redisson.getSemaphore(RedisKeys.semKey(slotId)).delete();
+            redisson.getSet(RedisKeys.dedupKey(slotId)).delete();
+            redisson.getBucket(RedisKeys.warmupDoneKey(slotId)).delete();
+        }
+    }
+
+    private boolean isCourtNameMismatched(List<Court> courts, String courtNameFormat, int courtCount) {
+        int max = Math.min(courts.size(), courtCount);
+        for (int i = 0; i < max; i++) {
+            String expectedName = String.format(courtNameFormat, i + 1);
+            if (!Objects.equals(expectedName, courts.get(i).getCourtName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

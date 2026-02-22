@@ -27,6 +27,20 @@ WHERE NOT EXISTS (
     SELECT 1 FROM config WHERE config_key = 'PAY_AMOUNT'
 );
 
+INSERT INTO config (config_key, value)
+SELECT 'COURT_COUNT', '15'
+FROM DUAL
+WHERE NOT EXISTS (
+    SELECT 1 FROM config WHERE config_key = 'COURT_COUNT'
+);
+
+INSERT INTO config (config_key, value)
+SELECT 'COURT_NAME_FORMAT', '球场 %d'
+FROM DUAL
+WHERE NOT EXISTS (
+    SELECT 1 FROM config WHERE config_key = 'COURT_NAME_FORMAT'
+);
+
 INSERT INTO user_account (student_id, password, user_role)
 SELECT 'root', '5A31893BE1B474502A046E74841E119B', 'ADMIN'
 FROM DUAL
