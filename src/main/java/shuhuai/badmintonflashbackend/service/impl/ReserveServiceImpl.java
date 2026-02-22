@@ -15,6 +15,7 @@ import shuhuai.badmintonflashbackend.constant.MqNames;
 import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.enm.PayOrderStatus;
 import shuhuai.badmintonflashbackend.enm.ReservationStatus;
+import shuhuai.badmintonflashbackend.enm.ReserveResultStatus;
 import shuhuai.badmintonflashbackend.entity.PayOrder;
 import shuhuai.badmintonflashbackend.entity.Reservation;
 import shuhuai.badmintonflashbackend.excep.BaseException;
@@ -22,6 +23,7 @@ import shuhuai.badmintonflashbackend.mapper.IPayOrderMapper;
 import shuhuai.badmintonflashbackend.mapper.IReservationMapper;
 import shuhuai.badmintonflashbackend.mq.ReservePublishCallbackHandler;
 import shuhuai.badmintonflashbackend.mq.message.ReserveMessage;
+import shuhuai.badmintonflashbackend.model.vo.ReserveResultVO;
 import shuhuai.badmintonflashbackend.response.ResponseCode;
 import shuhuai.badmintonflashbackend.service.IRateLimitService;
 import shuhuai.badmintonflashbackend.service.IReserveService;
@@ -56,11 +58,21 @@ public class ReserveServiceImpl implements IReserveService {
     }
 
     @Override
-    public void reserve(Integer userId, Integer slotId, Integer sessionId) {
+    public String reserve(Integer userId, Integer slotId, Integer sessionId) {
+        // 检查开闸
+        RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(sessionId));
+        if (!"1".equals(gate.get())) {
+            throw new BaseException(ResponseCode.UNGATED);
+        }
+
         // 快路径：Redis 校验 slot 与 session 的归属关系，避免串场抢票
+        // 说明：未预热时 slotSession 可能不存在，此时按“未开闸/未就绪”处理，避免误判 PARAM_ERROR
         RBucket<Integer> slotSession = redisson.getBucket(RedisKeys.slotSessionKey(slotId));
         Integer cachedSessionId = slotSession.get();
-        if (cachedSessionId == null || !cachedSessionId.equals(sessionId)) {
+        if (cachedSessionId == null) {
+            throw new BaseException(ResponseCode.UNGATED);
+        }
+        if (!cachedSessionId.equals(sessionId)) {
             throw new BaseException(ResponseCode.PARAM_ERROR);
         }
 
@@ -68,12 +80,6 @@ public class ReserveServiceImpl implements IReserveService {
         boolean allowed = rateLimitService.tryConsume(userId.toString(), 5, Duration.ofMinutes(1));
         if (!allowed) {
             throw new BaseException(ResponseCode.TOO_MANY_REQUESTS);
-        }
-
-        // 检查开闸
-        RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(sessionId));
-        if (!"1".equals(gate.get())) {
-            throw new BaseException(ResponseCode.UNGATED);
         }
 
         // 检查去重
@@ -131,6 +137,44 @@ public class ReserveServiceImpl implements IReserveService {
         } catch (Exception e) {
             throw new BaseException(ResponseCode.FAILED);
         }
+        return traceId;
+    }
+
+    @Override
+    public ReserveResultVO getReserveResult(Integer userId, String traceId) {
+        if (userId == null || traceId == null || traceId.isBlank()) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        Reservation reservation = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
+                .eq(Reservation::getTraceId, traceId));
+        if (reservation != null) {
+            if (!userId.equals(reservation.getUserId())) {
+                throw new BaseException(ResponseCode.PARAM_ERROR);
+            }
+            return new ReserveResultVO(
+                    traceId,
+                    ReserveResultStatus.SUCCESS,
+                    reservation.getId(),
+                    reservation.getStatus()
+            );
+        }
+        Object pendingObj = redisson.getBucket(RedisKeys.reservePendingKey(traceId)).get();
+        String pending = pendingObj == null ? null : String.valueOf(pendingObj);
+        if (pending != null && !pending.isBlank()) {
+            String[] parts = pending.split(":", 2);
+            if (parts.length == 2) {
+                try {
+                    Integer pendingUserId = Integer.parseInt(parts[0]);
+                    if (!userId.equals(pendingUserId)) {
+                        throw new BaseException(ResponseCode.PARAM_ERROR);
+                    }
+                } catch (NumberFormatException e) {
+                    throw new BaseException(ResponseCode.PARAM_ERROR);
+                }
+            }
+            return new ReserveResultVO(traceId, ReserveResultStatus.PENDING, null, null);
+        }
+        return new ReserveResultVO(traceId, ReserveResultStatus.FAILED, null, null);
     }
 
     @Override

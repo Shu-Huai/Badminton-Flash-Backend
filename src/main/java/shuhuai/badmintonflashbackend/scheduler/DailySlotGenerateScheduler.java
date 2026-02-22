@@ -1,6 +1,7 @@
 package shuhuai.badmintonflashbackend.scheduler;
 
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import shuhuai.badmintonflashbackend.enm.ConfigKey;
@@ -13,6 +14,7 @@ import java.time.LocalTime;
 /**
  * 每日定时任务：根据配置时间生成当日时间槽
  */
+@Slf4j
 @Component
 public class DailySlotGenerateScheduler {
     @Resource
@@ -33,6 +35,7 @@ public class DailySlotGenerateScheduler {
         }
         for (FlashSession flashSession : adminService.getSessions()) {
             adminService.generateSlot(flashSession.getId());
+            log.info("Generated slots for session {}", flashSession.getId());
         }
     }
 }

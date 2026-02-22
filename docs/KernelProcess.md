@@ -72,6 +72,9 @@ Spring Boot 3、Redis/Redisson、RabbitMQ、MySQL、MyBatis-Plus、Bucket4j。
 - 明确 NACK：立即按 `traceId` 补偿（释放 dedup+库存），返回失败。
 - 同步发送异常：立即补偿并返回失败。
 - confirm 超时：视为状态未知，不立刻补偿（避免误释放）。
+9. 接口同步返回 `traceId`，客户端可轮询查询结果：
+- `GET /reserve/result/{traceId}` -> `PENDING | SUCCESS | FAILED`
+- `SUCCESS` 时返回 `reservationId`
 
 ### 3) MQ 消费落库 `ReserveConsumer`
 
@@ -188,7 +191,8 @@ Spring Boot 3、Redis/Redisson、RabbitMQ、MySQL、MyBatis-Plus、Bucket4j。
 
 ## 当前接口清单（与本文对应）
 
-- `POST /reserve/`：发起抢占。
+- `POST /reserve/`：发起抢占，返回 `traceId`。
+- `GET /reserve/result/{traceId}`：查询抢占结果（成功时返回 `reservationId`）。
 - `DELETE /reserve/{reservationId}`：主动取消（仅待支付）。
 - `POST /pay/wechat/{reservationId}`：创建/复用微信支付单。
 - `POST /pay/wechat/mock-success/{outTradeNo}`：模拟支付成功（管理员）。

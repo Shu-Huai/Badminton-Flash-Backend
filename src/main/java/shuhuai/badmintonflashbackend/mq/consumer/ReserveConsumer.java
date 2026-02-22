@@ -33,20 +33,29 @@ public class ReserveConsumer {
             Reservation reservation = new Reservation();
             reservation.setUserId(message.getUserId());
             reservation.setSlotId(message.getSlotId());
+            reservation.setTraceId(message.getTraceId());
             reservation.setStatus(ReservationStatus.PENDING_PAYMENT);
             reservationMapper.insert(reservation);
             publishCallbackHandler.clearPending(message.getTraceId());
             log.info("预约成功落库 userId={}, slotId={}", message.getUserId(), message.getSlotId());
         } catch (DuplicateKeyException e) {
             Reservation existed = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
-                    .eq(Reservation::getSlotId, message.getSlotId()));
-            publishCallbackHandler.clearPending(message.getTraceId());
+                    .eq(Reservation::getSlotId, message.getSlotId())
+                    .in(Reservation::getStatus, ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED));
+            boolean hadPending = publishCallbackHandler.clearPending(message.getTraceId());
             if (existed != null && message.getUserId() != null && message.getUserId().equals(existed.getUserId())) {
                 // 同一用户 + 同一 slot：可视为消息重复投递（幂等）
                 log.warn("幂等命中，重复消息已忽略 userId={}, slotId={}", message.getUserId(), message.getSlotId());
                 return;
             }
             // 不同用户冲突到同一 slot：这是业务冲突，不是幂等成功
+            if (hadPending) {
+                publishCallbackHandler.releaseReserveResource(
+                        message.getUserId(),
+                        message.getSlotId(),
+                        message.getTraceId(),
+                        "consume-duplicate-conflict");
+            }
             log.warn("slot 已被占用，消息按业务冲突处理 userId={}, slotId={}", message.getUserId(), message.getSlotId());
         } catch (Exception e) {
             log.error("预约入库失败: {}", e.getMessage(), e);

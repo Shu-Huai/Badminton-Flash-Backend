@@ -159,15 +159,8 @@ public class TokenValidator implements HandlerInterceptor {
         } catch (Exception e) {
             throw new BaseException(ResponseCode.TOKEN_INVALID);
         }
-        if (timeOfUse >= tokenConfig.getYoungToken() && timeOfUse < tokenConfig.getOldToken()) {
-            Integer userId = Integer.parseInt(map.get(CLAIM_USER_ID));
-            UserRole role = UserRole.valueOf(map.get(CLAIM_ROLE));
-            httpServletResponse.setHeader("Authorization", BEARER_PREFIX + getToken(userId, role));
-        } else if (timeOfUse >= tokenConfig.getOldToken()) {
-            throw new BaseException(ResponseCode.TOKEN_EXPIRED);
-        }
 
-        Integer userId = Integer.parseInt(map.get(CLAIM_USER_ID));
+
         RoleRequirement requirement = getRoleRequirement(handlerMethod);
         if (requirement.roles().length > 0) {
             UserRole currentRole = UserRole.valueOf(map.get(CLAIM_ROLE));
@@ -178,6 +171,7 @@ public class TokenValidator implements HandlerInterceptor {
             }
         }
         if (requirement.dbCheck() && requirement.roles().length > 0) {
+            Integer userId = Integer.parseInt(map.get(CLAIM_USER_ID));
             UserRole dbRole = userService.getRole(userId);
             boolean dbPermitted = Arrays.stream(requirement.roles())
                     .anyMatch(requiredRole -> hasRole(dbRole, requiredRole));
@@ -185,6 +179,13 @@ public class TokenValidator implements HandlerInterceptor {
                 throw new BaseException(ResponseCode.FORBIDDEN);
             }
             map.put(CLAIM_ROLE, dbRole.name());
+        }
+        if (timeOfUse >= tokenConfig.getYoungToken() && timeOfUse < tokenConfig.getOldToken()) {
+            Integer userId = Integer.parseInt(map.get(CLAIM_USER_ID));
+            UserRole role = UserRole.valueOf(map.get(CLAIM_ROLE));
+            httpServletResponse.setHeader("Authorization", BEARER_PREFIX + getToken(userId, role));
+        } else if (timeOfUse >= tokenConfig.getOldToken()) {
+            throw new BaseException(ResponseCode.TOKEN_EXPIRED);
         }
         setUser(map);
         return true;

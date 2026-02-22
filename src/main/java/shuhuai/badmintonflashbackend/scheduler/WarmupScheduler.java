@@ -1,6 +1,7 @@
 package shuhuai.badmintonflashbackend.scheduler;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,7 @@ import shuhuai.badmintonflashbackend.utils.DateTimes;
 import java.time.*;
 import java.util.List;
 
+@Slf4j
 @Component
 public class WarmupScheduler {
     private final IFlashSessionMapper sessionMapper;
@@ -42,6 +44,7 @@ public class WarmupScheduler {
                 .le(FlashSession::getFlashTime, upper));
         for (FlashSession flashSession : flashSessions) {
             adminService.warmupSession(flashSession);
+            log.info("Warmup session {} at {}", flashSession.getId(), flashSession.getFlashTime());
         }
     }
 

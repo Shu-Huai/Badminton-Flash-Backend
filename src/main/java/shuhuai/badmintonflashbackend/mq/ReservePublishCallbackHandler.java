@@ -10,6 +10,7 @@ import org.springframework.amqp.core.ReturnedMessage;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.stereotype.Component;
 import shuhuai.badmintonflashbackend.constant.RedisKeys;
+import shuhuai.badmintonflashbackend.enm.ReservationStatus;
 import shuhuai.badmintonflashbackend.entity.Reservation;
 import shuhuai.badmintonflashbackend.mapper.IReservationMapper;
 
@@ -70,24 +71,37 @@ public class ReservePublishCallbackHandler {
         } catch (NumberFormatException e) {
             return;
         }
-        Reservation existed = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
-                .eq(Reservation::getSlotId, slotId));
-        if (existed != null) {
+        if (hasActiveReservation(slotId)) {
             log.warn("预约发布补偿跳过：slot 已落库 traceId={}, reason={}, userId={}, slotId={}",
                     traceId, reason, userId, slotId);
+            return;
+        }
+        releaseReserveResource(userId, slotId, traceId, reason);
+    }
+
+    public boolean clearPending(String traceId) {
+        if (traceId == null || traceId.isEmpty()) {
+            return false;
+        }
+        Object pending = redisson.getBucket(RedisKeys.reservePendingKey(traceId)).getAndDelete();
+        return pending != null && !String.valueOf(pending).isEmpty();
+    }
+
+    public void releaseReserveResource(Integer userId, Integer slotId, String traceId, String reason) {
+        if (userId == null || slotId == null) {
             return;
         }
         RSet<Integer> dedup = redisson.getSet(RedisKeys.dedupKey(slotId));
         dedup.remove(userId);
         RSemaphore semaphore = redisson.getSemaphore(RedisKeys.semKey(slotId));
         semaphore.release();
-        log.warn("预约发布补偿完成 traceId={}, reason={}, userId={}, slotId={}", traceId, reason, userId, slotId);
+        log.warn("预约资源回补完成 traceId={}, reason={}, userId={}, slotId={}", traceId, reason, userId, slotId);
     }
 
-    public void clearPending(String traceId) {
-        if (traceId == null || traceId.isEmpty()) {
-            return;
-        }
-        redisson.getBucket(RedisKeys.reservePendingKey(traceId)).delete();
+    private boolean hasActiveReservation(Integer slotId) {
+        Reservation existed = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
+                .eq(Reservation::getSlotId, slotId)
+                .in(Reservation::getStatus, ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED));
+        return existed != null;
     }
 }
