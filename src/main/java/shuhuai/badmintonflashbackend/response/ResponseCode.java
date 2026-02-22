@@ -45,6 +45,8 @@ public enum ResponseCode {
 
     DUP_GEN_SLOT(4556, "时间槽已生成"),
 
+    COURT_COUNT_UPDATE_WINDOW_CLOSED(4557, "球场数量仅可在每日0点到第一场预热开始前修改"),
+
     SQL_ERROR(5001, "服务器错误");
 
     private final int code;

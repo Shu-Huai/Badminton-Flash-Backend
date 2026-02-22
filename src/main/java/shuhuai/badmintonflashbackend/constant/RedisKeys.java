@@ -80,6 +80,11 @@ public class RedisKeys {
         return PREFIX + "pay:create:lock:" + reservationId;
     }
 
+    /** 启动时球场配置对账任务锁 */
+    public static String courtBootstrapLockKey() {
+        return PREFIX + "lock:court-bootstrap";
+    }
+
     /**
      * 计算距离当天 23:59:59 的秒数
      * @param day 目标日期
