@@ -9,6 +9,16 @@
 
 ## 2. 任务总览
 
+### 2.0 启动球场配置对账
+
+- 任务：`CourtBootstrapScheduler.reconcileCourtsOnStartup`
+- 触发时机：`ApplicationReadyEvent`（每次应用启动后执行一次）
+- 互斥锁：`bf:lock:court-bootstrap`
+- 执行动作：
+  - 读取 `COURT_COUNT`、`COURT_NAME_FORMAT` 与当前 `court` 表进行对账
+  - 若当前处于可变更窗口（`00:00 <= now < 第一场预热开始`），按配置修复数量与命名
+  - 若已过可变更窗口，只记录告警并跳过修复（不扩容、不缩容、不改名）
+
 ### 2.1 生成当日 slot
 
 - 调度器：`DailySlotGenerateScheduler.maybeGenerateTodaySlots`
@@ -73,8 +83,16 @@
 - 补偿规则：
   - `GENERATE_TIME_SLOT_TIME` 变化：触发所有 session 的 `generateSlot`
   - `WARMUP_MINUTE` 变化：对已进入预热窗口的 session 触发 `warmupSession`
+  - `COURT_COUNT` 变化：重建当天各 session 的 `time_slot`（清理相关 Redis 后再生成）
+  - `COURT_NAME_FORMAT` 变化：仅更新 `court_name`，不重建 `time_slot`（`time_slot` 绑定 `court_id`）
 
-## 5. 配置与 session 约束
+## 5. 球场配置约束
+
+- `COURT_COUNT` 仅允许在 `00:00 <= now < 第一场预热开始` 修改，超窗返回业务错误。
+- 启动对账任务在超窗时进入“只检查不修复”模式，避免影响当日抢票链路。
+- `COURT_NAME_FORMAT` 需可用于 `String.format(format, i)` 且包含 `%d` 占位符。
+
+## 6. 配置与 session 约束
 
 系统要求同一天内的时间关系成立：
 
@@ -88,12 +106,12 @@
 - 更新配置时：候选配置必须对所有 session 成立，否则拒绝更新
 - 新增/修改 session 时：必须对当前配置成立，否则拒绝提交
 
-## 6. 手动接口与调度协同
+## 7. 手动接口与调度协同
 
 管理接口 `POST /admin/warmup/{sessionId}`、`POST /admin/open/{sessionId}`、`POST /admin/slot-gen/{sessionId}`
 仍然保留。它们与定时任务共用同一组幂等标记与锁，允许人工补偿，不会破坏一致性。
 
-## 7. 已知边界
+## 8. 已知边界
 
 - 当前任务依赖数据库配置值可解析（如 `LocalTime.parse`、`Integer.parseInt`）。
 - 若未来放开“可跨日 session”需求，需要重新设计 `LocalTime` 维度下的比较与查询窗口逻辑。
