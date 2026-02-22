@@ -68,16 +68,24 @@ create table if not exists user_account
 
 create table if not exists reservation
 (
-    id          int auto_increment
+    id             int auto_increment
         primary key,
-    user_id     int                                  not null,
-    slot_id     int                                  not null,
-    status      varchar(127)                         not null,
-    create_time timestamp  default CURRENT_TIMESTAMP not null,
-    update_time timestamp  default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
-    is_active   tinyint(1) default 1                 not null,
-    constraint reservation_pk
-        unique (slot_id),
+    user_id        int                                  not null,
+    slot_id        int                                  not null,
+    trace_id       varchar(64)                          null,
+    status         varchar(127)                         not null,
+    active_slot_id int generated always as (
+        case
+            when status in ('PENDING_PAYMENT', 'CONFIRMED') then slot_id
+            end
+        ) stored,
+    create_time    timestamp  default CURRENT_TIMESTAMP not null,
+    update_time    timestamp  default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
+    is_active      tinyint(1) default 1                 not null,
+    constraint reservation_active_slot_uq
+        unique (active_slot_id),
+    constraint reservation_trace_id_uq
+        unique (trace_id),
     constraint reservation___fk
         foreign key (slot_id) references time_slot (id),
     constraint reservation_user_id_fk

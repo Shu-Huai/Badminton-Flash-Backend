@@ -249,9 +249,21 @@ public class AdminServiceImpl implements IAdminService {
         } catch (Exception e) {
             throw new BaseException(ResponseCode.PARAM_ERROR);
         }
-        if (flashSession.getFlashTime() == null || flashSession.getBeginTime() == null
-                || flashSession.getEndTime() == null || flashSession.getSlotInterval() == null) {
+        FlashSession oldSession = sessionMapper.selectById(id);
+        if (oldSession == null) {
             throw new BaseException(ResponseCode.PARAM_ERROR);
+        }
+        if (flashSession.getFlashTime() == null) {
+            flashSession.setFlashTime(oldSession.getFlashTime());
+        }
+        if (flashSession.getBeginTime() == null) {
+            flashSession.setBeginTime(oldSession.getBeginTime());
+        }
+        if (flashSession.getEndTime() == null) {
+            flashSession.setEndTime(oldSession.getEndTime());
+        }
+        if (flashSession.getSlotInterval() == null) {
+            flashSession.setSlotInterval(oldSession.getSlotInterval());
         }
         validConfigSession(warmupMinutes, generateTime, flashSession);
         flashSession.setId(id);

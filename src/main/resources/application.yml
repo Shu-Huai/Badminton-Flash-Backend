@@ -14,6 +14,12 @@ spring:
 server:
     port: 25001
 logging:
+    level:
+        root: WARN
+        shuhuai.badmintonflashbackend: ERROR
+        org.springframework.web: WARN
+        org.mybatis: ERROR
+        com.baomidou.mybatisplus: ERROR
     charset:
         console: UTF-8
         file: UTF-8
@@ -39,4 +45,4 @@ wechat:
         apiV3Key: mock_api_v3_key
         privateKeyPath: classpath:cert/apiclient_key.pem
         merchantSerialNumber: mock_serial_number
-        autoMockSuccess: false
+        autoMockSuccess: true

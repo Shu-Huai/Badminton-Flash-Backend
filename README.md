@@ -93,6 +93,7 @@ mvn spring-boot:run
 预约：
 
 - `POST /reserve/`
+- `GET /reserve/result/{traceId}`
 - `DELETE /reserve/{reservationId}`
 
 支付：

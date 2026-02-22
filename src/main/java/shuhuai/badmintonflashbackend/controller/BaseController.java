@@ -85,6 +85,10 @@ public class BaseController implements ResponseBodyAdvice<Object> {
         resolveExceptionLogger(error).error("{}：{}", RequestGetter.getRequestUrl(), message);
     }
 
+    private void logWarning(@Nullable Throwable error, String message) {
+        resolveExceptionLogger(error).warn("{}：{}", RequestGetter.getRequestUrl(), message);
+    }
+
     /**
      * 处理Spring参数异常
      *
@@ -111,7 +115,7 @@ public class BaseController implements ResponseBodyAdvice<Object> {
         switch (error) {
             case BaseException baseException -> {
                 response.setCode(baseException.getResponseCode());
-                logError(error, error.getMessage());
+                logWarning(error, error.getMessage());
             }
             case null, default -> {
                 if (error != null) {

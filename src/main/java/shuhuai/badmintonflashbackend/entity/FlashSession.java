@@ -30,10 +30,10 @@ public class FlashSession {
 
     public FlashSession(FlashSessionDTO flashSessionDTO) {
         try {
-            this.flashTime = LocalTime.parse(flashSessionDTO.getFlashTime());
-            this.beginTime = LocalTime.parse(flashSessionDTO.getBeginTime());
-            this.endTime = LocalTime.parse(flashSessionDTO.getEndTime());
-            this.slotInterval = flashSessionDTO.getSlotInterval();
+            this.flashTime = flashSessionDTO.getFlashTime() == null ? null : LocalTime.parse(flashSessionDTO.getFlashTime());
+            this.beginTime = flashSessionDTO.getBeginTime() == null ? null : LocalTime.parse(flashSessionDTO.getBeginTime());
+            this.endTime = flashSessionDTO.getEndTime() == null ? null : LocalTime.parse(flashSessionDTO.getEndTime());
+            this.slotInterval = flashSessionDTO.getSlotInterval() == null ? null : flashSessionDTO.getSlotInterval();
         } catch (Exception e) {
             throw new BaseException(ResponseCode.PARAM_ERROR);
         }
