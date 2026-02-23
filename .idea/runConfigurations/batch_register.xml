@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="batch-register" type="PowerShellRunType" factoryName="PowerShell" scriptUrl="Z:\JetBrains\IDEA\Badminton-Flash-Backend\scripts\batch-register.ps1" scriptParameters="-BaseUrl &quot;http://localhost:25001&quot; -Start 19126100 -End 19128100 -Password &quot;123456&quot; -Concurrency 1000" executablePath="C:/Program Files/PowerShell/7/pwsh.exe">
+    <envs />
+    <method v="2" />
+  </configuration>
+</component>
