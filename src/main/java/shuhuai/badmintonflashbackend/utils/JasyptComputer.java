@@ -1,17 +1,16 @@
 package shuhuai.badmintonflashbackend.utils;
 
-import lombok.NoArgsConstructor;
 import org.jasypt.encryption.StringEncryptor;
 import org.jasypt.encryption.pbe.PooledPBEStringEncryptor;
 import org.jasypt.encryption.pbe.config.SimpleStringPBEConfig;
-import org.springframework.beans.factory.annotation.Value;
+import shuhuai.badmintonflashbackend.config.JasyptConfig;
 
-@NoArgsConstructor
 public class JasyptComputer implements StringEncryptor {
-    @Value("${jasypt.encryptor.password}")
-    private String password;
-    @Value("${jasypt.encryptor.algorithm}")
-    private String algorithm;
+    private final JasyptConfig jasyptConfig;
+
+    public JasyptComputer(JasyptConfig jasyptConfig) {
+        this.jasyptConfig = jasyptConfig;
+    }
 
     @Override
     public String encrypt(String message) {
@@ -29,8 +28,8 @@ public class JasyptComputer implements StringEncryptor {
 
     public SimpleStringPBEConfig getConfig() {
         SimpleStringPBEConfig config = new SimpleStringPBEConfig();
-        config.setPassword(this.password);
-        config.setAlgorithm(this.algorithm);
+        config.setPassword(jasyptConfig.getPassword());
+        config.setAlgorithm(jasyptConfig.getAlgorithm());
         config.setKeyObtentionIterations(1000);
         config.setPoolSize(1);
         config.setSaltGeneratorClassName("org.jasypt.salt.RandomSaltGenerator");

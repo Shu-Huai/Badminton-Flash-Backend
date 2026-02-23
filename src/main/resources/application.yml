@@ -19,6 +19,7 @@ logging:
         shuhuai.badmintonflashbackend: INFO
         shuhuai.badmintonflashbackend.controller.ReserveController: ERROR
         shuhuai.badmintonflashbackend.service.impl.ReserveServiceImpl: ERROR
+        shuhuai.badmintonflashbackend.mq.consumer.ReserveConsumer: ERROR
         org.springframework.web: INFO
         org.mybatis: INFO
         com.baomidou.mybatisplus: INFO
@@ -48,3 +49,6 @@ wechat:
         privateKeyPath: classpath:cert/apiclient_key.pem
         merchantSerialNumber: mock_serial_number
         autoMockSuccess: true
+
+reserve:
+    mode: redis
