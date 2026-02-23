@@ -6,7 +6,6 @@ import shuhuai.badmintonflashbackend.auth.RequireRole;
 import shuhuai.badmintonflashbackend.enm.UserRole;
 import shuhuai.badmintonflashbackend.model.dto.ReserveDTO;
 import shuhuai.badmintonflashbackend.model.vo.ReserveResultVO;
-import shuhuai.badmintonflashbackend.model.vo.ReserveSubmitVO;
 import shuhuai.badmintonflashbackend.response.Response;
 import shuhuai.badmintonflashbackend.service.IReserveService;
 import shuhuai.badmintonflashbackend.utils.TokenValidator;
@@ -23,10 +22,10 @@ public class ReserveController {
     }
 
     @PostMapping({"", "/"})
-    public Response<ReserveSubmitVO> reserve(@RequestBody ReserveDTO reserveDTO) {
+    public Response<String> reserve(@RequestBody ReserveDTO reserveDTO) {
         Integer userId = Integer.parseInt(TokenValidator.getUser().get("userId"));
         String traceId = reserveService.reserve(userId, reserveDTO.getSlotId(), reserveDTO.getSessionId());
-        return new Response<>(new ReserveSubmitVO(traceId));
+        return new Response<>(traceId);
     }
 
     @GetMapping("/result/{traceId}")

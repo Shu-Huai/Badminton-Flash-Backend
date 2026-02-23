@@ -1,18 +1,23 @@
 package shuhuai.badmintonflashbackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.redisson.api.RBucket;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import shuhuai.badmintonflashbackend.constant.RedisKeys;
 import shuhuai.badmintonflashbackend.enm.ReservationStatus;
 import shuhuai.badmintonflashbackend.entity.Court;
 import shuhuai.badmintonflashbackend.entity.FlashSession;
 import shuhuai.badmintonflashbackend.entity.Reservation;
 import shuhuai.badmintonflashbackend.entity.TimeSlot;
+import shuhuai.badmintonflashbackend.excep.BaseException;
 import shuhuai.badmintonflashbackend.mapper.ICourtMapper;
 import shuhuai.badmintonflashbackend.mapper.IFlashSessionMapper;
 import shuhuai.badmintonflashbackend.mapper.IReservationMapper;
 import shuhuai.badmintonflashbackend.mapper.ITimeSlotMapper;
 import shuhuai.badmintonflashbackend.model.dto.ConditionBrowseSessionDTO;
 import shuhuai.badmintonflashbackend.model.dto.ConditionBrowseSlotDTO;
+import shuhuai.badmintonflashbackend.response.ResponseCode;
 import shuhuai.badmintonflashbackend.service.IBrowseService;
 
 import java.time.LocalDate;
@@ -26,13 +31,16 @@ public class BrowseServiceImpl implements IBrowseService {
     private final ICourtMapper courtMapper;
     private final ITimeSlotMapper timeSlotMapper;
     private final IReservationMapper reservationMapper;
+    private final RedissonClient redisson;
+
 
     public BrowseServiceImpl(IFlashSessionMapper sessionMapper, ICourtMapper courtMapper, ITimeSlotMapper timeSlotMapper,
-                             IReservationMapper reservationMapper) {
+                             IReservationMapper reservationMapper, RedissonClient redisson) {
         this.sessionMapper = sessionMapper;
         this.courtMapper = courtMapper;
         this.timeSlotMapper = timeSlotMapper;
         this.reservationMapper = reservationMapper;
+        this.redisson = redisson;
     }
 
     @Override
@@ -114,5 +122,11 @@ public class BrowseServiceImpl implements IBrowseService {
         queryWrapper.in(Reservation::getSlotId, slotIds);
         queryWrapper.in(statuses != null, Reservation::getStatus, statuses);
         return reservationMapper.selectList(queryWrapper);
+    }
+
+    @Override
+    public boolean isSessionOpen(Integer sessionId) {
+        RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(sessionId));
+        return "1".equals(gate.get());
     }
 }

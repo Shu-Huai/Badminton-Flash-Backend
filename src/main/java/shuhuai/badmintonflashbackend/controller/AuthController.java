@@ -5,7 +5,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shuhuai.badmintonflashbackend.model.dto.UserDTO;
-import shuhuai.badmintonflashbackend.model.vo.AuthTokenVO;
 import shuhuai.badmintonflashbackend.response.Response;
 import shuhuai.badmintonflashbackend.service.IUserService;
 import shuhuai.badmintonflashbackend.utils.TokenValidator;
@@ -22,18 +21,14 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public Response<AuthTokenVO> register(@RequestBody UserDTO userDTO) {
+    public Response<String> register(@RequestBody UserDTO userDTO) {
         Integer userId = userService.register(userDTO.getStudentId(), userDTO.getPassword());
-        return new Response<>(new AuthTokenVO(
-                tokenValidator.getToken(userId, userService.getRole(userId))
-        ));
+        return new Response<>(tokenValidator.getToken(userId, userService.getRole(userId)));
     }
 
     @PostMapping("/login")
-    public Response<AuthTokenVO> login(@RequestBody UserDTO userDTO) {
+    public Response<String> login(@RequestBody UserDTO userDTO) {
         Integer userId = userService.login(userDTO.getStudentId(), userDTO.getPassword());
-        return new Response<>(new AuthTokenVO(
-                tokenValidator.getToken(userId, userService.getRole(userId))
-        ));
+        return new Response<>(tokenValidator.getToken(userId, userService.getRole(userId)));
     }
 }

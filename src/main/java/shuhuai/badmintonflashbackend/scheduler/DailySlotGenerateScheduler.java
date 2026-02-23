@@ -35,7 +35,6 @@ public class DailySlotGenerateScheduler {
         }
         for (FlashSession flashSession : adminService.getSessions()) {
             adminService.generateSlot(flashSession.getId());
-            log.info("Generated slots for session {}", flashSession.getId());
         }
     }
 }
