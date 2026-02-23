@@ -44,7 +44,6 @@ public class WarmupScheduler {
                 .le(FlashSession::getFlashTime, upper));
         for (FlashSession flashSession : flashSessions) {
             adminService.warmupSession(flashSession);
-            log.info("Warmup session {} at {}", flashSession.getId(), flashSession.getFlashTime());
         }
     }
 
@@ -68,6 +67,7 @@ public class WarmupScheduler {
                 continue;
             }
             gate.set("1", Duration.ofSeconds(DateTimes.ttlToEndOfTodaySeconds()));
+            log.info("已为场次 {} 开闸", flashSession.getId());
         }
     }
 

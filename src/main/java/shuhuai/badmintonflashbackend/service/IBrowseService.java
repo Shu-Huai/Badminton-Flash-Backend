@@ -27,4 +27,6 @@ public interface IBrowseService {
 
     List<Reservation> getReservations(Integer userId, Integer sessionId, Integer slotId, Set<ReservationStatus> statuses,
                                       LocalDate dateLowerBound, LocalDate dateUpperBound);
+
+    boolean isSessionOpen(Integer sessionId);
 }

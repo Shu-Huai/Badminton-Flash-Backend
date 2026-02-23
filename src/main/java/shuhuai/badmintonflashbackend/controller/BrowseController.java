@@ -49,6 +49,11 @@ public class BrowseController {
         return new Response<>(browseService.getSession(id));
     }
 
+    @GetMapping("/open/{sessionId}")
+    public Response<Boolean> isSessionOpen(@PathVariable Integer sessionId) {
+        return new Response<>(browseService.isSessionOpen(sessionId));
+    }
+
     @GetMapping("/court")
     public Response<List<Court>> getCourts(@RequestParam(required = false) String courtNameLike) {
         return new Response<>(browseService.getCourts(courtNameLike));

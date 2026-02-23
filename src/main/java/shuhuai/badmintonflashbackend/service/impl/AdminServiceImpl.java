@@ -2,6 +2,7 @@ package shuhuai.badmintonflashbackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.redisson.api.RBucket;
@@ -293,6 +294,7 @@ public class AdminServiceImpl implements IAdminService {
 
     @Override
     public void warmupSession(FlashSession session) {
+        generateSlot(session.getId());
         LocalDate today = DateTimes.nowDate();
         long ttlSec = DateTimes.ttlToEndOfTodaySeconds();
         List<TimeSlot> timeSlots = timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
@@ -363,6 +365,7 @@ public class AdminServiceImpl implements IAdminService {
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
+                log.info("已完成为场次 {} 预热时间槽", session.getId());
             }
         }
     }
@@ -401,8 +404,9 @@ public class AdminServiceImpl implements IAdminService {
     public void openSession(Integer sessionId) {
         FlashSession session = sessionMapper.selectById(sessionId);
         if (session == null) {
-            return;
+            throw new BaseException(ResponseCode.PARAM_ERROR);
         }
+        warmupSession(session);
         long ttlSec = DateTimes.ttlToEndOfTodaySeconds();
         RBucket<String> gate = redisson.getBucket(RedisKeys.gateKey(session.getId()));
         gate.set("1", Duration.ofSeconds(ttlSec));
@@ -442,6 +446,7 @@ public class AdminServiceImpl implements IAdminService {
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
+                log.info("已完成为场次 {} 生成时间槽", sessionId);
             }
         }
     }
