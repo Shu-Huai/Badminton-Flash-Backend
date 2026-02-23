@@ -8,6 +8,7 @@ import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 
 @Service
+@ConditionalOnProperty(name = "reserve.mode", havingValue = "redis", matchIfMissing = true)
 public class ReserveServiceImpl implements IReserveService {
     private static final long PUBLISH_CONFIRM_TIMEOUT_MS = 3000L;
     private static final long PENDING_TTL_SECONDS = 300L;
