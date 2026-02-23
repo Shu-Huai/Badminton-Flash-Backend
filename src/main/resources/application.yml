@@ -15,11 +15,13 @@ server:
     port: 25001
 logging:
     level:
-        root: WARN
-        shuhuai.badmintonflashbackend: ERROR
-        org.springframework.web: WARN
-        org.mybatis: ERROR
-        com.baomidou.mybatisplus: ERROR
+        root: INFO
+        shuhuai.badmintonflashbackend: INFO
+        shuhuai.badmintonflashbackend.controller.ReserveController: ERROR
+        shuhuai.badmintonflashbackend.service.impl.ReserveServiceImpl: ERROR
+        org.springframework.web: INFO
+        org.mybatis: INFO
+        com.baomidou.mybatisplus: INFO
     charset:
         console: UTF-8
         file: UTF-8

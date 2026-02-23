@@ -55,8 +55,7 @@ public class UserServiceImpl extends ServiceImpl<IUserAccountMapper, UserAccount
                 new LambdaQueryWrapper<UserAccount>()
                         .eq(UserAccount::getStudentId, normalizedStudentId)
         );
-        if (userAccount == null || !Boolean.TRUE.equals(userAccount.getIsActive())
-                || !userAccount.getPassword().equals(HashComputer.getHashedString(password))) {
+        if (userAccount == null || !userAccount.getPassword().equals(HashComputer.getHashedString(password))) {
             throw new BaseException(ResponseCode.USERNAME_OR_PASSWORD_ERROR);
         }
         return userAccount.getId();
@@ -188,8 +187,8 @@ public class UserServiceImpl extends ServiceImpl<IUserAccountMapper, UserAccount
             throw new BaseException(ResponseCode.PARAM_ERROR);
         }
         UserAccount userAccount = userAccountMapper.selectById(userId);
-        if (userAccount == null || !Boolean.TRUE.equals(userAccount.getIsActive())) {
-            throw new BaseException(ResponseCode.TOKEN_INVALID);
+        if (userAccount == null) {
+            throw new BaseException(ResponseCode.PARAM_ERROR);
         }
         return userAccount;
     }
